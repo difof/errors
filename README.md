@@ -157,8 +157,9 @@ jb := errors.Must(json.Marshal(data))
 You also can recover errors with deferred `errors.Recover`:
 
 ```go
-func doesSomething() (any, error) {
-    return nil, errors.New("error message")
+func doesSomething() error {
+    ...
+    return errors.New("error message")
 }
 
 func handleManyThings (err error) {

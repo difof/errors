@@ -2,14 +2,13 @@ package errors
 
 import "testing"
 
-func recoverableMustError() (int, error) {
-	return 0, New("must fail")
+func recoverableMustError() error {
+	return New("must fail")
 }
 
 func recoverable() (err error) {
 	defer Recover(&err)
 
-	// Must(recoverableMustError())
 	Mustf(recoverableMustError())("this must cause death, but it didn't")
 
 	return

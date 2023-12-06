@@ -18,10 +18,3 @@ func Recover(errp *error) {
 		*errp = err
 	}
 }
-
-// Throw panics with the given error.
-func Throw(err error) {
-	if err != nil {
-		panic(WrapSkip(1, err))
-	}
-}

@@ -2,23 +2,41 @@ package errors
 
 import "fmt"
 
-// Must panics on error. Use Recover to catch the panic.
-func Must[T any](r T, err error) T {
-	if err != nil {
-		panic(WrapSkip(1, err))
+func mayPanicf(err error, format string, params ...any) {
+	if err == nil {
+		return
 	}
 
+	if format == "" {
+		panic(WrapSkip(2, err))
+	} else {
+		panic(WrapSkipf(2, err, format, params...))
+	}
+}
+
+// MustResult panics on error. Use Recover to catch the panic.
+func MustResult[T any](r T, err error) T {
+	mayPanicf(err, "")
 	return r
 }
 
-// Mustf returns a formatter function which panics with the given formatted error message.
-func Mustf[T any](r T, err error) func(format string, params ...any) T {
+// MustResultf returns a formatter function which panics with the given formatted error message.
+func MustResultf[T any](r T, err error) func(format string, params ...any) T {
 	return func(format string, params ...any) T {
-		if err == nil {
-			return r
-		}
+		mayPanicf(err, format, params...)
+		return r
+	}
+}
 
-		panic(WrapSkipf(1, err, format, params...))
+// Must panics with the given error.
+func Must(err error) {
+	mayPanicf(err, "")
+}
+
+// Mustf panics with the given error.
+func Mustf(err error) func(format string, params ...any) {
+	return func(format string, params ...any) {
+		mayPanicf(err, format, params...)
 	}
 }
 

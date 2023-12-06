@@ -25,6 +25,8 @@ func messageError() error {
 }
 
 func TestHasError(t *testing.T) {
+	SetShowPackageName(false)
+
 	err := func() error {
 		return Wrap(a())
 	}()

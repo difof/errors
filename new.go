@@ -3,7 +3,6 @@ package errors
 import (
 	"errors"
 	"fmt"
-	"runtime"
 )
 
 // New creates a new error
@@ -44,29 +43,4 @@ func WrapSkip(skip int, inner error) error {
 // WrapSkipf creates a new formatted error with inner error and custom stack skip
 func WrapSkipf(skip int, inner error, format string, params ...any) error {
 	return NewError(getCallerPath(skip), errors.New(fmt.Sprintf(format, params...)), inner)
-}
-
-var showFuncName = true
-
-// SetShowFuncName sets whether to show the function name in the stack trace before the file and line
-func SetShowFuncName(show bool) {
-	showFuncName = show
-}
-
-// getCallerPath returns the file and line which called any of New functions as string.
-//
-// skipFrames parameter defines how many functions to skip.
-func getCallerPath(skipFrames int) string {
-	pc, file, line, ok := runtime.Caller(2 + skipFrames)
-	if !ok {
-		return "<no source>"
-	}
-
-	f := runtime.FuncForPC(pc).Name()
-
-	if showFuncName {
-		return fmt.Sprintf("at %s %s:%d", f, file, line)
-	}
-
-	return fmt.Sprintf("%s:%d", file, line)
 }

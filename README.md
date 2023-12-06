@@ -4,8 +4,6 @@ Drop-in replacement for golang's standard error handling with readable stacktrac
 
 This package also adds some QoL error handling helpers.
 
----
-
 Error messages look like this:
 
 ```
@@ -27,6 +25,8 @@ And import in your code
 ```go
 import "github.com/difof/errors"
 ```
+
+**Docs:** [pkg.go.dev](https://pkg.go.dev/github.com/difof/errors)
 
 ## Creating errors
 
@@ -132,6 +132,27 @@ func DoQuery() (result MyData, err error) {
 }
 ```
 
+## QoL `if err != nil` helper
+
+Most of the time you have to constantly check if an error is not nil, and handle it many times in every function.
+It would be nice automatically return error or handle the result like in other languages such as Zig.
+
+You can use the `Must`, `Mustf`, `MustResult`, `MustResultf` functions and defer call to `Recover` to do this:
+
+```go
+func Foo() (err error) {
+    defer errors.Recover(&err)
+
+    filename := "foo.txt"
+    file := errors.Mustf(os.Open(filename))("failed to open file %s", filename)
+    defer errors.Mustf(file.Close())("failed to close file %s", filename)
+
+    // and so on...
+
+    return
+}
+```
+
 ## Other utilities
 
 #### Assert
@@ -143,40 +164,6 @@ errors.Assert(condition bool, message string)
 ```go
 errors.Assertf(condition bool, format string, args ...any)
 ```
-
-#### Death on error
-
-```go
-errors.Must[T any](r T, err error) T
-```
-
-```go
-jb := errors.Must(json.Marshal(data))
-```
-
-You also can recover errors with deferred `errors.Recover`:
-
-```go
-func doesSomething() error {
-    ...
-    return errors.New("error message")
-}
-
-func handleManyThings (err error) {
-    defer errors.Recover(&err)
-
-    result := Must(doesSomething())
-    r2 := Mustf(doSomethingElse(result))("the reason why it failed")
-
-    ...
-
-    return
-}
-```
-
-This is useful to avoid many `if err != nil then return` statements.
-The `Recover` and `Must` add the stacktrace so you know where the errors come from.
-You can also use `Mustf` to format the error message.
 
 #### Blasphemy
 

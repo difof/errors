@@ -2,7 +2,19 @@
 
 Drop-in replacement for golang's standard error handling with readable stacktrace and source location.
 
-This package includes a few extra utilities for error handling.
+This package also adds some QoL error handling helpers.
+
+---
+
+Error messages look like this:
+
+```
+at github.com/difof/errors.c /dev/errors/error_test.go:17: in 'c' error from 'messageError'
+at github.com/difof/errors.b /dev/errors/error_test.go:13: in 'b' error from 'c'
+at github.com/difof/errors.a /dev/errors/error_test.go:9: in 'a' error from 'b'
+at github.com/difof/errors.TestHasError.func1 /dev/errors/error_test.go:29
+at github.com/difof/errors.TestHasError /dev/errors/error_test.go:32
+```
 
 # Usage
 

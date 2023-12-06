@@ -9,7 +9,8 @@ func recoverableMustError() (int, error) {
 func recoverable() (err error) {
 	defer Recover(&err)
 
-	Must(recoverableMustError())
+	// Must(recoverableMustError())
+	Mustf(recoverableMustError())("this must cause death, but it didn't")
 
 	return
 }

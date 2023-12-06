@@ -142,6 +142,29 @@ errors.Must[T any](r T, err error) T
 jb := errors.Must(json.Marshal(data))
 ```
 
+You also can recover errors with deferred `errors.Recover`:
+
+```go
+func doesSomething() (any, error) {
+    return nil, errors.New("error message")
+}
+
+func handleManyThings (err error) {
+    defer errors.Recover(&err)
+
+    result := Must(doesSomething())
+    r2 := Mustf(doSomethingElse(result))("the reason why it failed")
+
+    ...
+
+    return
+}
+```
+
+This is useful to avoid many `if err != nil then return` statements.
+The `Recover` and `Must` add the stacktrace so you know where the errors come from.
+You can also use `Mustf` to format the error message.
+
 #### Blasphemy
 
 ```go

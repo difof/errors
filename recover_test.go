@@ -1,6 +1,9 @@
 package errors
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func recoverableMustError() error {
 	return New("must fail")
@@ -19,4 +22,16 @@ func TestRecover(t *testing.T) {
 	Assert(err != nil, "err should not be nil")
 
 	t.Log("\n\b", err)
+}
+
+func recoverable2() {
+	defer RecoverFn(func(err error) {
+		fmt.Printf("recovered from: %v\n", err)
+	})
+
+	defer Must(New("some error"))
+}
+
+func TestRecoverFn(t *testing.T) {
+	recoverable2()
 }

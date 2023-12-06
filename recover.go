@@ -18,3 +18,16 @@ func Recover(errp *error) {
 		*errp = err
 	}
 }
+
+// RecoverFn recovers from panic and calls the given function with the recovered error.
+func RecoverFn(fn func(error)) {
+	if r := recover(); r != nil {
+		err, ok := r.(error)
+		if !ok {
+			// Skipping 3 stack frames: recover.go, panic.go, must.go
+			err = NewSkipf(3, "%v", r)
+		}
+
+		fn(err)
+	}
+}

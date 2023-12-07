@@ -28,6 +28,20 @@ func MustResultf[T any](r T, err error) func(format string, params ...any) T {
 	}
 }
 
+// MustResult2 panics on error. Use Recover to catch the panic.
+func MustResult2[A, B any](a A, b B, err error) (A, B) {
+	mayPanicf(err, "")
+	return a, b
+}
+
+// MustResult2f returns a formatter function which panics with the given formatted error message.
+func MustResult2f[A, B any](a A, b B, err error) func(format string, params ...any) (A, B) {
+	return func(format string, params ...any) (A, B) {
+		mayPanicf(err, format, params...)
+		return a, b
+	}
+}
+
 // Must panics with the given error.
 func Must(err error) {
 	mayPanicf(err, "")

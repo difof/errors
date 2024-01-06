@@ -2,18 +2,6 @@ package errors
 
 import "fmt"
 
-func mayPanicf(err error, format string, params ...any) {
-	if err == nil {
-		return
-	}
-
-	if format == "" {
-		panic(WrapSkip(2, err))
-	} else {
-		panic(WrapSkipf(2, err, format, params...))
-	}
-}
-
 // MustResult panics on error. Use Recover to catch the panic.
 func MustResult[T any](r T, err error) T {
 	mayPanicf(err, "")

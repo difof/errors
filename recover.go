@@ -31,3 +31,8 @@ func RecoverFn(fn func(error)) {
 		fn(err)
 	}
 }
+
+// PassBack an alias for Recover
+func PassBack(errp *error) {
+	Recover(errp)
+}

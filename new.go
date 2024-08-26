@@ -20,6 +20,11 @@ func Wrap(inner error) error {
 	return NewError(getCallerPath(0), nil, inner)
 }
 
+// Warpe creates a new error with inner error
+func Warpe(err error, inner error) error {
+	return NewError(getCallerPath(0), err, inner)
+}
+
 // Wrapf creates a new formatted error with inner error
 func Wrapf(inner error, format string, params ...any) error {
 	return NewError(getCallerPath(0), errors.New(fmt.Sprintf(format, params...)), inner)

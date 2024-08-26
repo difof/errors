@@ -20,6 +20,16 @@ func NewError(source string, message, inner error) *Error {
 	}
 }
 
+// ErrorMessageOf returns the inner error message of the error
+func ErrorMessageOf(err error) string {
+	var e *Error
+	if As(err, &e) {
+		return e.ErrorMessage()
+	}
+
+	return err.Error()
+}
+
 // Each iterates over all inner errors of Error
 func (e *Error) Each(it func(err error) bool) {
 	if it == nil {
@@ -71,6 +81,26 @@ func (e *Error) String() string {
 		return e.Source
 	}
 	return fmt.Sprintf("%v: %v", e.Source, e.Message)
+}
+
+// ErrorMessage returns the inner error message without source or stack trace
+func (e *Error) ErrorMessage() (msg string) {
+	e.Each(func(err error) bool {
+		var e *Error
+		if As(err, &e) {
+			if e.Inner == nil {
+				msg = e.Message.Error()
+				return false
+			}
+		} else {
+			msg = err.Error()
+			return false
+		}
+
+		return true
+	})
+
+	return
 }
 
 // Error returns the stack trace of this error

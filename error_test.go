@@ -48,7 +48,8 @@ func TestHasError(t *testing.T) {
 	// 4. a
 	// 5. TestHasError.func1
 	// 6. TestHasError
-	t.Log(err.Error())
+	t.Log("T-STACKTRACE:", err.Error())
+	t.Log("T-ErrorMessage:", err.(*Error).ErrorMessage())
 }
 
 func RecursiveFunction(i int) (err error) {

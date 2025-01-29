@@ -14,6 +14,9 @@ import (
 //	    return errors.Wrap(err)
 //	}
 func Wrap(inner error) error {
+	if inner == nil {
+		return nil
+	}
 	return NewError(getCallerPath(0), nil, inner)
 }
 
@@ -59,6 +62,9 @@ func WrapResultf[T any](r T, err error) func(format string, params ...any) (T, e
 //
 //	return errors.Wrape(errors.New("validation failed"), err)
 func Wrape(err error, inner error) error {
+	if err == nil && inner == nil {
+		return nil
+	}
 	return NewError(getCallerPath(0), err, inner)
 }
 
@@ -74,6 +80,9 @@ func Wrape(err error, inner error) error {
 //
 //	return errors.Wrapf(err, "failed to process user %s", username)
 func Wrapf(inner error, format string, params ...any) error {
+	if inner == nil && format == "" {
+		return nil
+	}
 	return NewError(getCallerPath(0), errors.New(fmt.Sprintf(format, params...)), inner)
 }
 
@@ -84,6 +93,9 @@ func Wrapf(inner error, format string, params ...any) error {
 //   - skip: number of stack frames to skip
 //   - inner: the error to wrap
 func WrapSkip(skip int, inner error) error {
+	if inner == nil {
+		return nil
+	}
 	return NewError(getCallerPath(skip), nil, inner)
 }
 
@@ -96,5 +108,8 @@ func WrapSkip(skip int, inner error) error {
 //   - format: format string for the new error message
 //   - params: arguments for the format string
 func WrapSkipf(skip int, inner error, format string, params ...any) error {
+	if inner == nil && format == "" {
+		return nil
+	}
 	return NewError(getCallerPath(skip), errors.New(fmt.Sprintf(format, params...)), inner)
 }

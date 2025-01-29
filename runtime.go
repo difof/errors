@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"path"
 	"runtime"
+	"sync/atomic"
 )
 
 var (
 	// showFuncName controls whether function names are included in stack traces
-	showFuncName = true
+	showFuncName atomic.Bool
 	// showPackageName controls whether full package paths are shown in function names
-	showPackageName = true
+	showPackageName atomic.Bool
 )
 
 // SetShowFuncName sets whether to show the function name in the stack trace before the file and line.
@@ -18,7 +19,7 @@ var (
 // Parameters:
 //   - state: true to show function names, false to hide them
 func SetShowFuncName(state bool) {
-	showFuncName = state
+	showFuncName.Store(state)
 }
 
 // SetShowPackageName sets whether to show the full function name (package name/function name)
@@ -27,7 +28,7 @@ func SetShowFuncName(state bool) {
 // Parameters:
 //   - state: true to show full package path, false to show only function name
 func SetShowPackageName(state bool) {
-	showPackageName = state
+	showPackageName.Store(state)
 }
 
 // getCallerPath returns the file and line which called any of New functions as string.
@@ -49,8 +50,8 @@ func getCallerPath(skipFrames int) string {
 
 	f := runtime.FuncForPC(pc).Name()
 
-	if showFuncName {
-		if !showPackageName {
+	if showFuncName.Load() {
+		if !showPackageName.Load() {
 			f = stripPackageName(f)
 		}
 

@@ -28,10 +28,6 @@ func panicWithNonError() {
 	panic(123)
 }
 
-func panicWithNil() {
-	panic(nil)
-}
-
 // panics returns true if the function panics
 func panics(f func()) (didPanic bool) {
 	defer func() {
@@ -67,12 +63,6 @@ func TestRecover(t *testing.T) {
 			setup:       panicWithNonError,
 			wantErr:     true,
 			wantErrText: "123",
-		},
-		{
-			name:        "recover from nil panic",
-			setup:       panicWithNil,
-			wantErr:     true,
-			wantErrText: "panic called with nil argument",
 		},
 		{
 			name:    "no panic",

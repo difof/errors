@@ -19,7 +19,8 @@ tasks:
   test:
     desc: Run all tests verbosely
     silent: true
-    cmd: go test -v -timeout {{.TEST_TIMEOUT}} -count=1 {{.PACKAGE_NAME}} {{.CLI_ARGS}}
+    deps: [check-gotestsum]
+    cmd: gotestsum --format testname --hide-summary=output -- -timeout {{.TEST_TIMEOUT}} -count=1 {{.PACKAGE_NAME}} {{.CLI_ARGS}}
 
   test:file:
     desc: Run tests for specific file (usage - task test:file -- path/to/file_test.go)
@@ -52,3 +53,13 @@ tasks:
     desc: Shows a list of all test functions in the given file
     silent: true
     cmd: grep "^func Test" {{.CLI_ARGS}} | awk '{print $2}' | cut -d'(' -f1
+
+  check-gotestsum:
+    desc: Check if gotestsum is installed
+    internal: true
+    silent: true
+    cmd: |
+      if ! command -v gotestsum >/dev/null 2>&1; then
+        echo "Installing gotestsum..."
+        go install gotest.tools/gotestsum@latest
+      fi

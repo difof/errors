@@ -1,5 +1,18 @@
 package errors
 
+// recoverError handles panic recovery and converts the recovered value into an error.
+// skipFrames specifies how many stack frames to skip when creating a new error.
+func recoverError(r any, skipFrames int) error {
+	if r == nil {
+		return nil
+	}
+
+	if err, ok := r.(error); ok {
+		return err
+	}
+	return NewSkipf(skipFrames, "%v", r)
+}
+
 // Recover recovers from panic and sets the error pointer to the recovered error.
 // If the recovered value is not an error, it will be wrapped in a new error.
 //
@@ -20,18 +33,13 @@ package errors
 //	    return
 //	}
 func Recover(errp *error) {
+	if errp == nil {
+		// If errp is nil, let the panic propagate
+		return
+	}
+
 	if r := recover(); r != nil {
-		if errp == nil {
-			return
-		}
-
-		err, ok := r.(error)
-		if !ok {
-			// Skipping 3 stack frames: recover.go, panic.go, must.go
-			err = NewSkipf(3, "%v", r)
-		}
-
-		*errp = err
+		*errp = recoverError(r, 3)
 	}
 }
 
@@ -51,26 +59,20 @@ func Recover(errp *error) {
 //	})
 func RecoverFn(fn func(error)) {
 	if r := recover(); r != nil {
-		err, ok := r.(error)
-		if !ok {
-			// Skipping 3 stack frames: recover.go, panic.go, must.go
-			err = NewSkipf(3, "%v", r)
-		}
-
-		fn(err)
+		fn(recoverError(r, 3))
 	}
 }
 
-// PassBack is an alias for Recover, providing a more descriptive name for the
-// operation of passing a panic back as an error.
+// HandlePanic is an alias for Recover, providing a more descriptive name for the
+// operation of handling a panic and converting it to an error.
 //
 // Example:
 //
 //	func DoSomething() (err error) {
-//	    defer errors.PassBack(&err)
+//	    defer errors.HandlePanic(&err)
 //	    // ... code that might panic
 //	    return
 //	}
-func PassBack(errp *error) {
+func HandlePanic(errp *error) {
 	Recover(errp)
 }

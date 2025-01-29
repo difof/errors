@@ -25,22 +25,12 @@ func Newf(format string, params ...any) error {
 	return NewError(getCallerPath(0), errors.New(fmt.Sprintf(format, params...)), nil)
 }
 
-// Wrap wraps the error
-func Wrap(inner error) error {
-	return NewError(getCallerPath(0), nil, inner)
-}
-
-// Warpe creates a new error with inner error
-func Wrape(err error, inner error) error {
-	return NewError(getCallerPath(0), err, inner)
-}
-
-// Wrapf creates a new formatted error with inner error
-func Wrapf(inner error, format string, params ...any) error {
-	return NewError(getCallerPath(0), errors.New(fmt.Sprintf(format, params...)), inner)
-}
-
-// NewSkip creates a new error with custom stack skip
+// NewSkip creates a new error, skipping the specified number of stack frames
+// when recording the source location.
+//
+// Parameters:
+//   - skip: number of stack frames to skip
+//   - msg: error message
 func NewSkip(skip int, msg string) error {
 	return NewError(getCallerPath(skip), errors.New(msg), nil)
 }
@@ -54,14 +44,4 @@ func NewSkip(skip int, msg string) error {
 //   - params: arguments for the format string
 func NewSkipf(skip int, format string, params ...any) error {
 	return NewError(getCallerPath(skip), errors.New(fmt.Sprintf(format, params...)), nil)
-}
-
-// WrapSkip wraps the error with custom stack skip
-func WrapSkip(skip int, inner error) error {
-	return NewError(getCallerPath(skip), nil, inner)
-}
-
-// WrapSkipf creates a new formatted error with inner error and custom stack skip
-func WrapSkipf(skip int, inner error, format string, params ...any) error {
-	return NewError(getCallerPath(skip), errors.New(fmt.Sprintf(format, params...)), inner)
 }

@@ -37,6 +37,10 @@ func NewError(source string, message, inner error) *Error {
 // If the error is an *Error type, it traverses the chain to get the root message.
 // For other error types, it returns the standard error message.
 func ErrorMessageOf(err error) string {
+	if err == nil {
+		return ""
+	}
+
 	var e *Error
 	if As(err, &e) {
 		return e.ErrorMessage()
@@ -85,7 +89,7 @@ func (e *Error) StackTrace() (list []string) {
 	list = make([]string, 0, 5)
 
 	defer func() {
-		// reverse
+		// reverse to show root cause first
 		for i, j := 0, len(list)-1; i < j; i, j = i+1, j-1 {
 			list[i], list[j] = list[j], list[i]
 		}

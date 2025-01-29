@@ -1,6 +1,7 @@
 package errors
 
 import (
+	goerrors "errors"
 	"fmt"
 	"strings"
 )
@@ -144,3 +145,14 @@ func (e *Error) Error() string {
 // Unwrap returns the inner error, implementing the interface
 // required for errors.Is and errors.As compatibility.
 func (e *Error) Unwrap() error { return e.Inner }
+
+func (e *Error) Is(target error) bool {
+	if target == nil {
+		return e == nil
+	}
+	return goerrors.Is(e.Message, target) || goerrors.Is(e.Inner, target)
+}
+
+func (e *Error) As(target any) bool {
+	return goerrors.As(e.Message, target) || goerrors.As(e.Inner, target)
+}

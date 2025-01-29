@@ -21,8 +21,14 @@ func Maybe[E error](err error) (t E) {
 		return
 	}
 
-	if Is(err, t) {
-		return err.(E)
+	// Try direct type assertion first
+	if target, ok := err.(E); ok {
+		return target
+	}
+
+	// Try unwrapping
+	if As(err, &t) {
+		return t
 	}
 
 	mayPanicf(err, "")
@@ -52,8 +58,14 @@ func Maybef[E error](err error) func(format string, params ...any) E {
 			return
 		}
 
-		if Is(err, t) {
-			return err.(E)
+		// Try direct type assertion first
+		if target, ok := err.(E); ok {
+			return target
+		}
+
+		// Try unwrapping
+		if As(err, &t) {
+			return t
 		}
 
 		mayPanicf(err, format, params...)
@@ -80,12 +92,17 @@ func MaybeResult[T any, E error](r T, err error) (t T, e E) {
 	t = r
 
 	if err == nil {
-		t = r
 		return
 	}
 
-	if Is(err, e) {
-		e = err.(E)
+	// Try direct type assertion first
+	if target, ok := err.(E); ok {
+		e = target
+		return
+	}
+
+	// Try unwrapping
+	if As(err, &e) {
 		return
 	}
 
@@ -118,12 +135,17 @@ func MaybeResultf[T any, E error](r T, err error) func(format string, params ...
 		t = r
 
 		if err == nil {
-			t = r
 			return
 		}
 
-		if Is(err, e) {
-			e = err.(E)
+		// Try direct type assertion first
+		if target, ok := err.(E); ok {
+			e = target
+			return
+		}
+
+		// Try unwrapping
+		if As(err, &e) {
 			return
 		}
 

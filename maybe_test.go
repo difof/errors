@@ -28,6 +28,20 @@ type wrappedTestError struct {
 func (e *wrappedTestError) Error() string { return e.inner.Error() }
 func (e *wrappedTestError) Unwrap() error { return e.inner }
 
+// Additional error types for interface conversion tests
+type ErrorWithCode interface {
+	error
+	Code() string
+}
+
+type maybeCustomError struct {
+	msg  string
+	code string
+}
+
+func (e *maybeCustomError) Error() string { return e.msg }
+func (e *maybeCustomError) Code() string  { return e.code }
+
 func TestMaybe(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -328,6 +342,61 @@ func TestMaybeWithWrappedError(t *testing.T) {
 		}
 		if err.msg != "inner error" {
 			t.Errorf("MaybeResultf() error = %v, want inner error", err)
+		}
+	})
+
+	// Test multiple levels of wrapping
+	t.Run("MaybeResultf with multiple wrapping levels", func(t *testing.T) {
+		innerErr := &maybeTestError{msg: "deep inner error"}
+		wrapped1 := fmt.Errorf("level 1: %w", innerErr)
+		wrapped2 := fmt.Errorf("level 2: %w", wrapped1)
+
+		val, err := MaybeResultf[int, *maybeTestError](42, wrapped2)("deep error: %v", wrapped2)
+		if val != 42 {
+			t.Errorf("MaybeResultf() value = %v, want 42", val)
+		}
+		if err.msg != "deep inner error" {
+			t.Errorf("MaybeResultf() error = %v, want deep inner error", err)
+		}
+	})
+
+	// Test type assertion edge cases
+	t.Run("MaybeResultf with interface conversion", func(t *testing.T) {
+		origErr := &maybeCustomError{msg: "custom error", code: "E123"}
+		wrapped := fmt.Errorf("wrapped: %w", origErr)
+
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("Expected panic for interface conversion, but got none")
+			}
+		}()
+
+		// This should panic as we're trying to convert to maybeTestError
+		MaybeResultf[int, *maybeTestError](42, wrapped)("unexpected: %v", wrapped)
+	})
+
+	// Test with nil error and formatting
+	t.Run("MaybeResultf with nil error and formatting", func(t *testing.T) {
+		val, err := MaybeResultf[string, *maybeTestError]("success", nil)("should not matter: %v", "test")
+		if val != "success" {
+			t.Errorf("MaybeResultf() value = %v, want success", val)
+		}
+		if err != nil {
+			t.Errorf("MaybeResultf() error = %v, want nil", err)
+		}
+	})
+
+	// Test with custom format verbs
+	t.Run("MaybeResultf with custom format verbs", func(t *testing.T) {
+		innerErr := &maybeTestError{msg: "format test"}
+		wrapped := fmt.Errorf("wrapped %%special%%: %w", innerErr)
+
+		val, err := MaybeResultf[int, *maybeTestError](42, wrapped)("error with special formatting %%: %v", wrapped)
+		if val != 42 {
+			t.Errorf("MaybeResultf() value = %v, want 42", val)
+		}
+		if err.msg != "format test" {
+			t.Errorf("MaybeResultf() error = %v, want 'format test'", err)
 		}
 	})
 }

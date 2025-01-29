@@ -3,10 +3,6 @@ package errors
 // recoverError handles panic recovery and converts the recovered value into an error.
 // skipFrames specifies how many stack frames to skip when creating a new error.
 func recoverError(r any, skipFrames int) error {
-	if r == nil {
-		return nil
-	}
-
 	if err, ok := r.(error); ok {
 		return err
 	}
@@ -61,18 +57,4 @@ func RecoverFn(fn func(error)) {
 	if r := recover(); r != nil {
 		fn(recoverError(r, 3))
 	}
-}
-
-// HandlePanic is an alias for Recover, providing a more descriptive name for the
-// operation of handling a panic and converting it to an error.
-//
-// Example:
-//
-//	func DoSomething() (err error) {
-//	    defer errors.HandlePanic(&err)
-//	    // ... code that might panic
-//	    return
-//	}
-func HandlePanic(errp *error) {
-	Recover(errp)
 }

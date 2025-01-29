@@ -70,7 +70,7 @@ func CatchResult[R any](result R, err error) func(callback func(R) error) error 
 
 	return func(f func(result R) error) (err error) {
 		if err = f(result); err != nil {
-			return WrapSkip(1, f(result))
+			return WrapSkip(1, err)
 		}
 
 		return
@@ -105,7 +105,7 @@ func CatchResultf[R any](result R, err error) func(callback func(R) error, forma
 
 	return func(f func(result R) error, format string, params ...any) (err error) {
 		if err = f(result); err != nil {
-			return WrapSkipf(1, f(result), format, params...)
+			return WrapSkipf(1, err, format, params...)
 		}
 
 		return

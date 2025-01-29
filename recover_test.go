@@ -28,50 +28,19 @@ func panicWithNonError() {
 	panic(123)
 }
 
-// runWithRecover runs a function with error recovery and returns the recovered error
-func runWithRecover(f func()) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			if e, ok := r.(error); ok {
-				err = e
-			} else {
-				err = NewSkipf(3, "%v", r)
-			}
-		}
-	}()
-	f()
-	return
+func panicWithNil() {
+	panic(nil)
 }
 
-// runWithRecoverFn runs a function with error recovery and calls the callback with the recovered error
-func runWithRecoverFn(f func(), cb func(error)) {
+// panics returns true if the function panics
+func panics(f func()) (didPanic bool) {
 	defer func() {
 		if r := recover(); r != nil {
-			var err error
-			if e, ok := r.(error); ok {
-				err = e
-			} else {
-				err = NewSkipf(3, "%v", r)
-			}
-			cb(err)
+			didPanic = true
 		}
 	}()
 	f()
-}
-
-// runWithHandlePanic runs a function with error recovery using HandlePanic
-func runWithHandlePanic(f func()) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			if e, ok := r.(error); ok {
-				err = e
-			} else {
-				err = NewSkipf(3, "%v", r)
-			}
-		}
-	}()
-	f()
-	return
+	return false
 }
 
 func TestRecover(t *testing.T) {
@@ -100,6 +69,12 @@ func TestRecover(t *testing.T) {
 			wantErrText: "123",
 		},
 		{
+			name:        "recover from nil panic",
+			setup:       panicWithNil,
+			wantErr:     true,
+			wantErrText: "panic called with nil argument",
+		},
+		{
 			name:    "no panic",
 			setup:   func() {},
 			wantErr: false,
@@ -126,7 +101,11 @@ func TestRecover(t *testing.T) {
 				return
 			}
 
-			err := runWithRecover(tt.setup)
+			var err error
+			func() {
+				defer Recover(&err)
+				tt.setup()
+			}()
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Recover() error = %v, wantErr %v", err, tt.wantErr)
@@ -141,9 +120,11 @@ func TestRecover(t *testing.T) {
 
 	// Test the original recoverable function
 	t.Run("original recoverable test", func(t *testing.T) {
-		err := runWithRecover(func() {
+		var err error
+		func() {
+			defer Recover(&err)
 			Mustf(recoverableMustError())("this must cause death, but it didn't")
-		})
+		}()
 		Assert(err != nil, "err should not be nil")
 		if !strings.Contains(err.Error(), "must fail") {
 			t.Errorf("recoverable() error = %v, want error containing 'must fail'", err)
@@ -188,10 +169,13 @@ func TestRecoverFn(t *testing.T) {
 			var gotErr error
 			var fnCalled bool
 
-			runWithRecoverFn(tt.setup, func(err error) {
-				fnCalled = true
-				gotErr = err
-			})
+			func() {
+				defer RecoverFn(func(err error) {
+					fnCalled = true
+					gotErr = err
+				})
+				tt.setup()
+			}()
 
 			if tt.wantErr {
 				if !fnCalled {
@@ -233,12 +217,27 @@ func TestHandlePanic(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
-			err := runWithHandlePanic(tt.setup)
+			var err error
+			var didPanic bool
 
-			if (err != nil) != tt.wantErr {
-				t.Errorf("HandlePanic() error = %v, wantErr %v", err, tt.wantErr)
-				return
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						didPanic = true
+						err = recoverError(r, 3)
+					}
+				}()
+				tt.setup()
+			}()
+
+			if didPanic {
+				if !tt.wantErr {
+					t.Error("HandlePanic() got panic, want no panic")
+				}
+			} else if tt.wantErr {
+				t.Error("HandlePanic() got no panic, want panic")
 			}
 
 			if tt.wantErr && !strings.Contains(err.Error(), tt.wantErrText) {
@@ -268,20 +267,58 @@ func TestRecoveryConsistency(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		tc := tc // capture range variable
 		t.Run(tc.name, func(t *testing.T) {
 			// Test all recovery functions
-			err1 := runWithRecover(tc.setup)
+			var err1, err2, err3 error
+			var fnCalled bool
+			var didPanic1, didPanic2, didPanic3 bool
 
-			var err2 error
-			runWithRecoverFn(tc.setup, func(e error) {
-				err2 = e
-			})
+			// Test Recover
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						didPanic1 = true
+						err1 = recoverError(r, 3)
+					}
+				}()
+				tc.setup()
+			}()
 
-			err3 := runWithHandlePanic(tc.setup)
+			// Test RecoverFn
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						didPanic2 = true
+						err2 = recoverError(r, 3)
+						fnCalled = true
+					}
+				}()
+				tc.setup()
+			}()
+
+			// Test HandlePanic
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						didPanic3 = true
+						err3 = recoverError(r, 3)
+					}
+				}()
+				tc.setup()
+			}()
+
+			if !didPanic1 || !didPanic2 || !didPanic3 {
+				t.Fatal("one or more recovery functions did not handle the panic")
+			}
 
 			// Compare error messages
 			if err1 == nil || err2 == nil || err3 == nil {
 				t.Fatal("all recovery functions should return non-nil errors")
+			}
+
+			if !fnCalled {
+				t.Fatal("RecoverFn callback was not called")
 			}
 
 			// Extract just the error message without file/line info
@@ -295,15 +332,4 @@ func TestRecoveryConsistency(t *testing.T) {
 			}
 		})
 	}
-}
-
-// panics returns true if the function panics
-func panics(f func()) (didPanic bool) {
-	defer func() {
-		if r := recover(); r != nil {
-			didPanic = true
-		}
-	}()
-	f()
-	return false
 }

@@ -5,6 +5,9 @@ vars:
     sh: find . -type f -name '*.go'
   TEST_TIMEOUT: 30s
   PACKAGE_NAME: .
+  COVERAGE_FILE: coverage.out
+  COVERAGE_HTML: coverage.html
+  COVERAGE_LCOV: coverage.lcov
   # PACKAGE_NAME: github.com/difof/errors
 
 tasks:
@@ -53,6 +56,37 @@ tasks:
     desc: Check if files are formatted correctly
     cmd: gofmt -l {{.GO_FILES}}
 
+  coverage:
+    desc: Run tests with coverage and generate reports
+    silent: true
+    deps: [check-gocov]
+    cmds:
+      - go test {{.PACKAGE_NAME}} -coverprofile={{.COVERAGE_FILE}} {{.CLI_ARGS}}
+      - go tool cover -html={{.COVERAGE_FILE}} -o {{.COVERAGE_HTML}}
+      # Generate LCOV format for CI
+      - go test {{.PACKAGE_NAME}} -coverprofile={{.COVERAGE_LCOV}} -coverpkg=./... {{.CLI_ARGS}}
+      - |
+        if [ "$(uname)" = "Darwin" ]; then
+          sed -i '' "s|_$(pwd)|.|g" {{.COVERAGE_LCOV}}
+        else
+          sed -i "s|_$(pwd)|.|g" {{.COVERAGE_LCOV}}
+        fi
+
+  coverage:clean:
+    desc: Clean up coverage files
+    cmd: rm -f {{.COVERAGE_FILE}} {{.COVERAGE_HTML}} {{.COVERAGE_LCOV}}
+
+  coverage:view:
+    desc: View coverage report in browser
+    deps: [coverage]
+    cmds:
+      - cmd: xdg-open {{.COVERAGE_HTML}}
+        platforms: [linux]
+      - cmd: open {{.COVERAGE_HTML}}
+        platforms: [darwin]
+      - cmd: start {{.COVERAGE_HTML}}
+        platforms: [windows]
+
   testfuncs:
     desc: Shows a list of all test functions in the given file
     silent: true
@@ -66,4 +100,14 @@ tasks:
       if ! command -v gotestsum >/dev/null 2>&1; then
         echo "Installing gotestsum..."
         go install gotest.tools/gotestsum@latest
+      fi
+
+  check-gocov:
+    desc: Check if gocov tools are installed
+    internal: true
+    silent: true
+    cmd: |
+      if ! command -v gocov >/dev/null 2>&1; then
+        echo "Installing gocov..."
+        go install github.com/axw/gocov/gocov@latest
       fi

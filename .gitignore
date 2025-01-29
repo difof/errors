@@ -21,3 +21,8 @@
 go.work
 
 .idea
+
+# Coverage files
+coverage.out
+coverage.html
+coverage.lcov

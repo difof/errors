@@ -8,6 +8,10 @@ vars:
   # PACKAGE_NAME: github.com/difof/errors
 
 tasks:
+  default:
+    desc: Run tests
+    cmd: task test
+
   tidy:
     desc: Tidy up go.mod and download dependencies
     cmd: go mod tidy

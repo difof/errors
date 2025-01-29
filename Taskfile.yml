@@ -1,0 +1,74 @@
+version: '3'
+
+vars:
+  GO_FILES:
+    sh: find . -type f -name '*.go'
+
+tasks:
+  default:
+    cmds:
+      - task: test
+      - task: build
+
+  tidy:
+    desc: Tidy up go.mod and download dependencies
+    cmds:
+      - go mod tidy
+
+  get:
+    desc: Get/update Go dependencies (usage - task get -- package-name)
+    cmds:
+      - go get -u {{.CLI_ARGS}}
+
+  test:
+    desc: Run all tests verbosely
+    cmds:
+      - go test -v ./...
+
+  test:file:
+    desc: Run tests in current directory (usage - task test:file)
+    dir: '{{.USER_WORKING_DIR}}'
+    cmds:
+      - go test -v
+
+  test:func:
+    desc: Run specific test function (usage - task test:func -- TestFunctionName)
+    cmds:
+      - go test -v ./... -run {{.CLI_ARGS}}
+
+  test:watch:
+    desc: Run tests on file changes
+    cmds:
+      - task: test
+    sources:
+      - '**/*.go'
+    method: timestamp
+    watch: true
+
+  build:
+    desc: Build the binary
+    cmds:
+      - go build -v ./...
+
+  fmt:
+    desc: Format all Go files
+    cmds:
+      - gofmt -s -w {{.GO_FILES}}
+
+  fmt:check:
+    desc: Check if files are formatted correctly
+    cmds:
+      - gofmt -l {{.GO_FILES}}
+
+  lint:
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint run
+
+  all:
+    desc: Run all quality checks and tests
+    cmds:
+      - task: fmt
+      - task: lint
+      - task: test
+      - task: build

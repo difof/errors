@@ -1,9 +1,21 @@
 package errors
 
-// Maybe panics if err is not nil and doesn't implement T.
-// Returns T if err is of type T.
+// Maybe panics if err is not nil and doesn't implement type E.
+// Returns err as type E if err implements E, otherwise panics.
 //
-// Useful for panic unless error can be handled.
+// This function is useful when you expect a specific error type and want to
+// handle it, but want to panic for any other unexpected errors.
+//
+// Type Parameters:
+//   - E: the expected error type
+//
+// Parameters:
+//   - err: the error to check
+//
+// Example:
+//
+//	var netErr *net.OpError
+//	netErr = errors.Maybe[*net.OpError](err) // panics if err is not *net.OpError
 func Maybe[E error](err error) (t E) {
 	if err == nil {
 		return
@@ -17,7 +29,23 @@ func Maybe[E error](err error) (t E) {
 	return
 }
 
-// Maybef is same as Maybe, but returns a formatter function which panics with the given formatted error message.
+// Maybef is same as Maybe, but returns a formatter function that panics
+// with a formatted message if the error doesn't match the expected type.
+//
+// Type Parameters:
+//   - E: the expected error type
+//
+// Parameters:
+//   - err: the error to check
+//
+// Returns a function that takes:
+//   - format: format string for error message if panic occurs
+//   - params: arguments for the format string
+//
+// Example:
+//
+//	var netErr *net.OpError
+//	netErr = errors.Maybef[*net.OpError](err)("unexpected error type: %v", err)
 func Maybef[E error](err error) func(format string, params ...any) E {
 	return func(format string, params ...any) (t E) {
 		if err == nil {
@@ -33,7 +61,21 @@ func Maybef[E error](err error) func(format string, params ...any) E {
 	}
 }
 
-// MaybeResult is same as Maybe, but it's used for returning a result.
+// MaybeResult is same as Maybe but works with a result value and an error.
+// Returns the result and the error as type E if err implements E,
+// otherwise panics.
+//
+// Type Parameters:
+//   - T: the result type
+//   - E: the expected error type
+//
+// Parameters:
+//   - r: the result value
+//   - err: the error to check
+//
+// Example:
+//
+//	value, timeoutErr := errors.MaybeResult[int, *TimeoutError](result, err)
 func MaybeResult[T any, E error](r T, err error) (t T, e E) {
 	t = r
 
@@ -51,7 +93,26 @@ func MaybeResult[T any, E error](r T, err error) (t T, e E) {
 	return
 }
 
-// MaybeResultf is same as MaybeResult, but returns a formatter function which panics with the given formatted error message.
+// MaybeResultf is same as MaybeResult but returns a formatter function
+// that panics with a formatted message if the error doesn't match the
+// expected type.
+//
+// Type Parameters:
+//   - T: the result type
+//   - E: the expected error type
+//
+// Parameters:
+//   - r: the result value
+//   - err: the error to check
+//
+// Returns a function that takes:
+//   - format: format string for error message if panic occurs
+//   - params: arguments for the format string
+//
+// Example:
+//
+//	value, timeoutErr := errors.MaybeResultf[int, *TimeoutError](result, err)(
+//	    "unexpected error type: %v", err)
 func MaybeResultf[T any, E error](r T, err error) func(format string, params ...any) (t T, e E) {
 	return func(format string, params ...any) (t T, e E) {
 		t = r

@@ -6,12 +6,23 @@ import (
 )
 
 // Error is a lightweight drop-in replacement for standard errors package with stacktrace.
+//
+// It provides enhanced error handling capabilities by maintaining:
+//   - Source: The location where the error occurred (file:line)
+//   - Message: The actual error message
+//   - Inner: The wrapped/underlying error for error chaining
 type Error struct {
 	Source  string
 	Message error
 	Inner   error
 }
 
+// NewError creates a new Error instance with the given source location, message, and inner error.
+//
+// Parameters:
+//   - source: typically the file:line where the error occurred
+//   - message: the error message to be displayed
+//   - inner: optional underlying error to be wrapped
 func NewError(source string, message, inner error) *Error {
 	return &Error{
 		Source:  source,
@@ -20,7 +31,10 @@ func NewError(source string, message, inner error) *Error {
 	}
 }
 
-// ErrorMessageOf returns the inner error message of the error
+// ErrorMessageOf returns the innermost error message of the error chain.
+//
+// If the error is an *Error type, it traverses the chain to get the root message.
+// For other error types, it returns the standard error message.
 func ErrorMessageOf(err error) string {
 	var e *Error
 	if As(err, &e) {
@@ -30,7 +44,16 @@ func ErrorMessageOf(err error) string {
 	return err.Error()
 }
 
-// Each iterates over all inner errors of Error
+// Each iterates over all inner errors of Error chain.
+//
+// The iteration continues until either:
+//
+//   - The callback returns false
+//   - There are no more inner errors to process
+//
+// Parameters:
+//   - it: callback function that receives each error in the chain
+//     Return false from the callback to stop iteration
 func (e *Error) Each(it func(err error) bool) {
 	if it == nil {
 		return
@@ -51,7 +74,12 @@ func (e *Error) Each(it func(err error) bool) {
 	}
 }
 
-// StackTrace builds the stack trace of all inner errors of Error
+// StackTrace builds a complete stack trace of all inner errors.
+//
+// Returns a slice of strings where each entry represents one level
+// in the error chain, starting from the innermost error.
+//
+// The returned stack trace is in reverse order (root cause first).
 func (e *Error) StackTrace() (list []string) {
 	list = make([]string, 0, 5)
 
@@ -75,7 +103,9 @@ func (e *Error) StackTrace() (list []string) {
 	return
 }
 
-// String returns current error's message and source
+// String returns a formatted string of the current error level,
+// combining the source location and error message if present.
+// If there's no message, only the source is returned.
 func (e *Error) String() string {
 	if e.Message == nil {
 		return e.Source
@@ -83,7 +113,9 @@ func (e *Error) String() string {
 	return fmt.Sprintf("%v: %v", e.Source, e.Message)
 }
 
-// ErrorMessage returns the inner error message without source or stack trace
+// ErrorMessage returns the innermost error message without source location
+// or stack trace information. This is useful when you only need the core
+// error message without the additional context.
 func (e *Error) ErrorMessage() (msg string) {
 	e.Each(func(err error) bool {
 		var e *Error
@@ -103,10 +135,12 @@ func (e *Error) ErrorMessage() (msg string) {
 	return
 }
 
-// Error returns the stack trace of this error
+// Error implements the error interface and returns the complete
+// stack trace of this error as a newline-separated string.
 func (e *Error) Error() string {
 	return strings.Join(e.StackTrace(), "\n")
 }
 
-// Unwrap returns the inner error
+// Unwrap returns the inner error, implementing the interface
+// required for errors.Is and errors.As compatibility.
 func (e *Error) Unwrap() error { return e.Inner }

@@ -20,6 +20,14 @@ type maybeOtherError struct{ msg string }
 
 func (e *maybeOtherError) Error() string { return e.msg }
 
+// wrappedTestError wraps a maybeTestError
+type wrappedTestError struct {
+	inner error
+}
+
+func (e *wrappedTestError) Error() string { return e.inner.Error() }
+func (e *wrappedTestError) Unwrap() error { return e.inner }
+
 func TestMaybe(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -85,6 +93,13 @@ func TestMaybef(t *testing.T) {
 		{
 			name:      "matching error type",
 			err:       &maybeTestError{msg: "test error"},
+			format:    "unexpected error: %v",
+			params:    []any{"test"},
+			wantPanic: false,
+		},
+		{
+			name:      "wrapped error type",
+			err:       &wrappedTestError{inner: &maybeTestError{msg: "inner error"}},
 			format:    "unexpected error: %v",
 			params:    []any{"test"},
 			wantPanic: false,
@@ -278,6 +293,41 @@ func TestMaybeWithNetError(t *testing.T) {
 		result := Maybe[*net.OpError](wrapped)
 		if result.Op != "read" || result.Net != "tcp" {
 			t.Errorf("Maybe() with wrapped net.OpError failed to preserve error details")
+		}
+	})
+}
+
+func TestMaybeWithWrappedError(t *testing.T) {
+	innerErr := &maybeTestError{msg: "inner error"}
+	wrappedErr := &wrappedTestError{inner: innerErr}
+
+	// Test Maybe with wrapped error
+	t.Run("Maybe with wrapped error", func(t *testing.T) {
+		result := Maybe[*maybeTestError](wrappedErr)
+		if result.msg != "inner error" {
+			t.Errorf("Maybe() with wrapped error = %v, want inner error", result)
+		}
+	})
+
+	// Test MaybeResult with wrapped error
+	t.Run("MaybeResult with wrapped error", func(t *testing.T) {
+		val, err := MaybeResult[int, *maybeTestError](42, wrappedErr)
+		if val != 42 {
+			t.Errorf("MaybeResult() value = %v, want 42", val)
+		}
+		if err.msg != "inner error" {
+			t.Errorf("MaybeResult() error = %v, want inner error", err)
+		}
+	})
+
+	// Test MaybeResultf with wrapped error
+	t.Run("MaybeResultf with wrapped error", func(t *testing.T) {
+		val, err := MaybeResultf[int, *maybeTestError](42, wrappedErr)("unexpected error: %v", wrappedErr)
+		if val != 42 {
+			t.Errorf("MaybeResultf() value = %v, want 42", val)
+		}
+		if err.msg != "inner error" {
+			t.Errorf("MaybeResultf() error = %v, want inner error", err)
 		}
 	})
 }

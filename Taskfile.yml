@@ -3,72 +3,52 @@ version: '3'
 vars:
   GO_FILES:
     sh: find . -type f -name '*.go'
+  TEST_TIMEOUT: 30s
+  PACKAGE_NAME: .
+  # PACKAGE_NAME: github.com/difof/errors
 
 tasks:
-  default:
-    cmds:
-      - task: test
-      - task: build
-
   tidy:
     desc: Tidy up go.mod and download dependencies
-    cmds:
-      - go mod tidy
+    cmd: go mod tidy
 
   get:
     desc: Get/update Go dependencies (usage - task get -- package-name)
-    cmds:
-      - go get -u {{.CLI_ARGS}}
+    cmd: go get -u {{.CLI_ARGS}}
 
   test:
     desc: Run all tests verbosely
-    cmds:
-      - go test -v ./...
+    silent: true
+    cmd: go test -v -timeout {{.TEST_TIMEOUT}} -count=1 {{.PACKAGE_NAME}} {{.CLI_ARGS}}
 
   test:file:
-    desc: Run tests in current directory (usage - task test:file)
-    dir: '{{.USER_WORKING_DIR}}'
-    cmds:
-      - go test -v
+    desc: Run tests for specific file (usage - task test:file -- path/to/file_test.go)
+    silent: true
+    cmd: task test -- -run $(task testfuncs -- {{.CLI_ARGS}} | sed -e ':a' -e 'N' -e '$!ba' -e 's/\n/|/g' -e 's/^/^(/' -e 's/$/)$/')
 
   test:func:
     desc: Run specific test function (usage - task test:func -- TestFunctionName)
-    cmds:
-      - go test -v ./... -run {{.CLI_ARGS}}
+    silent: true
+    cmd: |
+      task test -- -run ^{{.CLI_ARGS}}$ 
 
   test:watch:
     desc: Run tests on file changes
-    cmds:
-      - task: test
+    cmd: task test
     sources:
       - '**/*.go'
     method: timestamp
     watch: true
 
-  build:
-    desc: Build the binary
-    cmds:
-      - go build -v ./...
-
   fmt:
     desc: Format all Go files
-    cmds:
-      - gofmt -s -w {{.GO_FILES}}
+    cmd: gofmt -s -w {{.GO_FILES}}
 
   fmt:check:
     desc: Check if files are formatted correctly
-    cmds:
-      - gofmt -l {{.GO_FILES}}
+    cmd: gofmt -l {{.GO_FILES}}
 
-  lint:
-    desc: Run golangci-lint
-    cmds:
-      - golangci-lint run
-
-  all:
-    desc: Run all quality checks and tests
-    cmds:
-      - task: fmt
-      - task: lint
-      - task: test
-      - task: build
+  testfuncs:
+    desc: Shows a list of all test functions in the given file
+    silent: true
+    cmd: grep "^func Test" {{.CLI_ARGS}} | awk '{print $2}' | cut -d'(' -f1

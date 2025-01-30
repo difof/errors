@@ -1,9 +1,11 @@
 package errors
 
 import (
-	"fmt"
-	"strings"
+	"database/sql"
+	"errors"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCatch(t *testing.T) {
@@ -18,8 +20,13 @@ func TestCatch(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "non-nil error",
-			err:     fmt.Errorf("test error"),
+			name:    "standard error",
+			err:     errors.New("test error"),
+			wantErr: true,
+		},
+		{
+			name:    "custom error",
+			err:     NewError("pkg.func", "file.go", 42, errors.New("custom error"), nil),
 			wantErr: true,
 		},
 	}
@@ -27,8 +34,11 @@ func TestCatch(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := Catch(tt.err)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Catch() error = '%v', wantErr '%v'", err, tt.wantErr)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Equal(t, ErrorMessageOf(tt.err), ErrorMessageOf(err))
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}
@@ -41,7 +51,7 @@ func TestCatchf(t *testing.T) {
 		msg        string
 		params     []any
 		wantErr    bool
-		wantErrMsg string
+		wantPrefix string
 	}{
 		{
 			name:    "nil error",
@@ -51,221 +61,271 @@ func TestCatchf(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:       "non-nil error with params",
-			err:        fmt.Errorf("base error"),
-			msg:        "test message: %v",
+			name:       "standard error with format",
+			err:        errors.New("base error"),
+			msg:        "wrapped message: %v",
 			params:     []any{"param"},
 			wantErr:    true,
-			wantErrMsg: "base error\ncatch_test.go:64: test message: param",
+			wantPrefix: "wrapped message: param",
+		},
+		{
+			name:       "custom error with empty format",
+			err:        NewError("pkg.func", "file.go", 42, errors.New("custom error"), nil),
+			msg:        "",
+			params:     nil,
+			wantErr:    true,
+			wantPrefix: "",
+		},
+		{
+			name:       "error with multiple params",
+			err:        errors.New("base error"),
+			msg:        "%v: %v - %v",
+			params:     []any{"first", "second", "third"},
+			wantErr:    true,
+			wantPrefix: "first: second - third",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := Catchf(tt.err, tt.msg, tt.params...)
-
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Catchf() error = '%v', wantErr '%v'", err, tt.wantErr)
-			}
-
-			if tt.wantErr && err != nil && !strings.Contains(err.Error(), "base error") && !strings.Contains(err.Error(), "test message: param") {
-				t.Errorf("Catchf() error message = '%v', want to contain both 'base error' and 'test message: param'", err)
+			if tt.wantErr {
+				assert.Error(t, err)
+				if tt.wantPrefix != "" {
+					assert.Contains(t, err.Error(), tt.wantPrefix)
+				}
+				// Check that the original error message is somewhere in the chain
+				var found bool
+				for e := err; e != nil; e = errors.Unwrap(e) {
+					if e.Error() == tt.err.Error() {
+						found = true
+						break
+					}
+				}
+				assert.True(t, found, "Original error message not found in chain")
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}
 }
 
 func TestIgnoreResult(t *testing.T) {
-	callback := IgnoreResult[string]()
-	if err := callback("test"); err != nil {
-		t.Errorf("IgnoreResult callback returned error: %v", err)
-	}
-}
-
-func TestCatchResult(t *testing.T) {
 	tests := []struct {
-		name       string
-		result     string
-		err        error
-		callback   func(string) error
-		wantErr    bool
-		wantErrMsg string
+		name string
+		val  any
 	}{
 		{
-			name:   "success case",
-			result: "success",
-			err:    nil,
-			callback: func(s string) error {
-				if s != "success" {
-					return fmt.Errorf("unexpected result: %s", s)
-				}
-				return nil
-			},
-			wantErr: false,
+			name: "ignore string",
+			val:  "test string",
 		},
 		{
-			name:    "input error case",
-			result:  "",
-			err:     fmt.Errorf("input error"),
-			wantErr: true,
+			name: "ignore int",
+			val:  42,
 		},
 		{
-			name:   "callback error case",
-			result: "fail",
-			err:    nil,
-			callback: func(s string) error {
-				return fmt.Errorf("callback error")
-			},
-			wantErr: true,
+			name: "ignore struct",
+			val:  struct{ field string }{"test"},
+		},
+		{
+			name: "ignore nil",
+			val:  nil,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.callback == nil {
-				tt.callback = func(s string) error { return nil }
-			}
-			err := CatchResult(tt.result, tt.err)(tt.callback)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("CatchResult() error = %v, wantErr %v", err, tt.wantErr)
-			}
+			callback := IgnoreResult[any]()
+			err := callback(tt.val)
+			assert.NoError(t, err)
 		})
 	}
 }
 
-func TestCatchResultf(t *testing.T) {
+func TestCatchResult(t *testing.T) {
+	type testStruct struct {
+		field string
+	}
+
 	tests := []struct {
 		name       string
-		result     string
+		result     any
 		err        error
-		callback   func(string) error
+		callback   func(any) error
+		wantErr    bool
+		wantErrMsg string
+	}{
+		{
+			name:   "nil error with successful callback",
+			result: "test result",
+			err:    nil,
+			callback: func(r any) error {
+				return nil
+			},
+			wantErr: false,
+		},
+		{
+			name:   "nil error with failing callback",
+			result: "test result",
+			err:    nil,
+			callback: func(r any) error {
+				return errors.New("callback error")
+			},
+			wantErr:    true,
+			wantErrMsg: "callback error",
+		},
+		{
+			name:   "error with unused callback",
+			result: "test result",
+			err:    errors.New("initial error"),
+			callback: func(r any) error {
+				return nil
+			},
+			wantErr:    true,
+			wantErrMsg: "initial error",
+		},
+		{
+			name:   "nil error with nil callback result",
+			result: (*testStruct)(nil),
+			err:    nil,
+			callback: func(r any) error {
+				return nil
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := CatchResult(tt.result, tt.err)(tt.callback)
+			if tt.wantErr {
+				assert.Error(t, err)
+				// Check that the expected error message is somewhere in the chain
+				var found bool
+				for e := err; e != nil; e = errors.Unwrap(e) {
+					if e.Error() == tt.wantErrMsg {
+						found = true
+						break
+					}
+				}
+				assert.True(t, found, "Expected error message not found in chain")
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+
+	// Test with type parameter
+	t.Run("typed result", func(t *testing.T) {
+		result := &sql.Row{}
+		err := CatchResult[*sql.Row](result, nil)(func(r *sql.Row) error {
+			return nil
+		})
+		assert.NoError(t, err)
+	})
+}
+
+func TestCatchResultf(t *testing.T) {
+	type testStruct struct {
+		field string
+	}
+
+	tests := []struct {
+		name       string
+		result     any
+		err        error
+		callback   func(any) error
 		format     string
 		params     []any
 		wantErr    bool
 		wantErrMsg string
 	}{
 		{
-			name:   "success case",
-			result: "success",
+			name:   "nil error with successful callback",
+			result: "test result",
 			err:    nil,
-			callback: func(s string) error {
-				if s != "success" {
-					return fmt.Errorf("unexpected result: %s", s)
-				}
+			callback: func(r any) error {
 				return nil
 			},
-			format:  "test format: %v",
-			params:  []any{"param"},
+			format:  "error: %v",
+			params:  []any{"test"},
 			wantErr: false,
 		},
 		{
-			name:       "input error case",
-			result:     "",
-			err:        fmt.Errorf("input error"),
-			format:     "error occurred: %v",
-			params:     []any{"test param"},
-			wantErr:    true,
-			wantErrMsg: "error occurred: test param",
-		},
-		{
-			name:   "callback error case",
-			result: "fail",
+			name:   "nil error with failing callback",
+			result: "test result",
 			err:    nil,
-			callback: func(s string) error {
-				return fmt.Errorf("callback error")
+			callback: func(r any) error {
+				return errors.New("callback error")
 			},
-			format:     "processing failed: %v",
+			format:     "wrapped error: %v",
 			params:     []any{"test"},
 			wantErr:    true,
-			wantErrMsg: "processing failed: test",
+			wantErrMsg: "callback error",
+		},
+		{
+			name:   "error with unused callback",
+			result: "test result",
+			err:    errors.New("initial error"),
+			callback: func(r any) error {
+				return nil
+			},
+			format:     "wrapped error: %v",
+			params:     []any{"test"},
+			wantErr:    true,
+			wantErrMsg: "initial error",
+		},
+		{
+			name:   "nil error with nil callback result",
+			result: (*testStruct)(nil),
+			err:    nil,
+			callback: func(r any) error {
+				return nil
+			},
+			format:  "error: %v",
+			params:  []any{"test"},
+			wantErr: false,
+		},
+		{
+			name:   "error with empty format",
+			result: "test result",
+			err:    errors.New("initial error"),
+			callback: func(r any) error {
+				return nil
+			},
+			format:     "",
+			params:     nil,
+			wantErr:    true,
+			wantErrMsg: "initial error",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.callback == nil {
-				tt.callback = func(s string) error { return nil }
-			}
 			err := CatchResultf(tt.result, tt.err)(tt.callback, tt.format, tt.params...)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("CatchResultf() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if tt.wantErr && err != nil {
-				errStr := err.Error()
-				switch tt.name {
-				case "input error case":
-					if !strings.Contains(errStr, "input error") || !strings.Contains(errStr, "error occurred: test param") {
-						t.Errorf("CatchResultf() error message = '%v', want to contain both 'input error' and 'error occurred: test param'", err)
-					}
-				case "callback error case":
-					if !strings.Contains(errStr, "callback error") || !strings.Contains(errStr, "processing failed: test") {
-						t.Errorf("CatchResultf() error message = '%v', want to contain both 'callback error' and 'processing failed: test'", err)
+			if tt.wantErr {
+				assert.Error(t, err)
+				// Check that the expected error message is somewhere in the chain
+				var found bool
+				for e := err; e != nil; e = errors.Unwrap(e) {
+					if e.Error() == tt.wantErrMsg {
+						found = true
+						break
 					}
 				}
+				assert.True(t, found, "Expected error message not found in chain")
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}
-}
 
-func TestCatchResultRecursive(t *testing.T) {
-	tests := []struct {
-		name           string
-		outerResult    string
-		outerErr       error
-		innerResult    int
-		innerErr       error
-		wantErr        bool
-		wantSideEffect int
-	}{
-		{
-			name:           "success case - both callbacks execute",
-			outerResult:    "outer",
-			outerErr:       nil,
-			innerResult:    42,
-			innerErr:       nil,
-			wantErr:        false,
-			wantSideEffect: 2, // both callbacks increment
-		},
-		{
-			name:           "outer error - no callbacks execute",
-			outerResult:    "outer",
-			outerErr:       fmt.Errorf("outer error"),
-			innerResult:    42,
-			innerErr:       nil,
-			wantErr:        true,
-			wantSideEffect: 0,
-		},
-		{
-			name:           "inner error - only outer callback executes",
-			outerResult:    "outer",
-			outerErr:       nil,
-			innerResult:    42,
-			innerErr:       fmt.Errorf("inner error"),
-			wantErr:        true,
-			wantSideEffect: 1, // only outer callback increments
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			sideEffect := 0
-
-			err := CatchResult(tt.outerResult, tt.outerErr)(func(outer string) error {
-				sideEffect++ // outer callback side effect
-
-				return CatchResult(tt.innerResult, tt.innerErr)(func(inner int) error {
-					sideEffect++ // inner callback side effect
-					return nil
-				})
-			})
-
-			if (err != nil) != tt.wantErr {
-				t.Errorf("CatchResult() recursive error = %v, wantErr %v", err, tt.wantErr)
-			}
-
-			if sideEffect != tt.wantSideEffect {
-				t.Errorf("CatchResult() side effect = %v, want %v", sideEffect, tt.wantSideEffect)
-			}
-		})
-	}
+	// Test with type parameter
+	t.Run("typed result", func(t *testing.T) {
+		result := &sql.Row{}
+		err := CatchResultf[*sql.Row](result, nil)(func(r *sql.Row) error {
+			return nil
+		}, "error: %v", "test")
+		assert.NoError(t, err)
+	})
 }

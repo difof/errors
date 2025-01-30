@@ -32,22 +32,14 @@ func (f *textFormatter) FormatError(filepath string, message error, inner error)
 	var stack []string
 
 	// Add current error first
-	if message != nil {
-		stack = append(stack, fmt.Sprintf("at %s: %s", filepath, message.Error()))
-	} else {
-		stack = append(stack, fmt.Sprintf("at %s", filepath))
-	}
+	stack = append(stack, f.FormatStack(filepath, message))
 
 	// Add inner errors recursively
 	var current error = inner
 	var e *Error
 	for current != nil {
 		if As(current, &e) {
-			if e.Message != nil {
-				stack = append(stack, fmt.Sprintf("at %s: %s", e.FilePath, e.Message.Error()))
-			} else {
-				stack = append(stack, fmt.Sprintf("at %s", e.FilePath))
-			}
+			stack = append(stack, f.FormatStack(e.FilePath, e.Message))
 			current = e.Inner
 		} else {
 			stack = append(stack, fmt.Sprintf("at %s", current.Error()))
@@ -103,39 +95,17 @@ type jsonFormatter struct {
 func (f *jsonFormatter) FormatError(filepath string, message error, inner error) string {
 	var stack []jsonError
 
-	// Add current error first
-	entry := jsonError{}
-	if GetErrorConfig().ShowFuncName {
-		if e, ok := message.(*Error); ok && e.FuncPath != "" {
-			entry.FuncPath = e.FuncPath
-		}
-	}
-	if GetErrorConfig().ShowFilePath {
-		entry.FilePath = filepath
-	}
-	if message != nil {
-		entry.Message = message.Error()
-	}
-	stack = append(stack, entry)
+	// Parse the FormatStack output for current error
+	stackEntry := f.parseStackEntry(filepath, message)
+	stack = append(stack, stackEntry)
 
 	// Add inner errors recursively
 	var current error = inner
 	var e *Error
 	for current != nil {
 		if As(current, &e) {
-			entry := jsonError{}
-			if GetErrorConfig().ShowFuncName {
-				if e.FuncPath != "" {
-					entry.FuncPath = e.FuncPath
-				}
-			}
-			if GetErrorConfig().ShowFilePath {
-				entry.FilePath = e.FilePath
-			}
-			if e.Message != nil {
-				entry.Message = e.Message.Error()
-			}
-			stack = append(stack, entry)
+			stackEntry := f.parseStackEntry(e.FilePath, e.Message)
+			stack = append(stack, stackEntry)
 			current = e.Inner
 		} else {
 			stack = append(stack, jsonError{Message: current.Error()})
@@ -151,6 +121,23 @@ func (f *jsonFormatter) FormatError(filepath string, message error, inner error)
 
 	data, _ := json.MarshalIndent(stack, f.config.Prefix, f.config.Indent)
 	return string(data)
+}
+
+// Helper method to parse FormatStack output into jsonError struct
+func (f *jsonFormatter) parseStackEntry(filepath string, message error) jsonError {
+	entry := jsonError{}
+	if GetErrorConfig().ShowFuncName {
+		if e, ok := message.(*Error); ok && e.FuncPath != "" {
+			entry.FuncPath = e.FuncPath
+		}
+	}
+	if GetErrorConfig().ShowFilePath {
+		entry.FilePath = filepath
+	}
+	if message != nil {
+		entry.Message = message.Error()
+	}
+	return entry
 }
 
 func (f *jsonFormatter) FormatStack(filepath string, message error) string {
@@ -186,47 +173,17 @@ func (f *yamlFormatter) FormatError(filepath string, message error, inner error)
 		Message  string
 	}
 
-	// Add current error first
-	entry := struct {
-		FilePath string
-		FuncPath string
-		Message  string
-	}{}
-	if GetErrorConfig().ShowFilePath {
-		entry.FilePath = filepath
-	}
-	if message != nil {
-		entry.Message = message.Error()
-	}
-	if GetErrorConfig().ShowFuncName {
-		if e, ok := message.(*Error); ok && e.FuncPath != "" {
-			entry.FuncPath = e.FuncPath
-		}
-	}
-	stack = append(stack, entry)
+	// Parse the FormatStack output for current error
+	stackEntry := f.parseStackEntry(filepath, message)
+	stack = append(stack, stackEntry)
 
 	// Add inner errors recursively
 	var current error = inner
 	var e *Error
 	for current != nil {
 		if As(current, &e) {
-			entry := struct {
-				FilePath string
-				FuncPath string
-				Message  string
-			}{}
-			if GetErrorConfig().ShowFilePath {
-				entry.FilePath = e.FilePath
-			}
-			if e.Message != nil {
-				entry.Message = e.Message.Error()
-			}
-			if GetErrorConfig().ShowFuncName {
-				if e.FuncPath != "" {
-					entry.FuncPath = e.FuncPath
-				}
-			}
-			stack = append(stack, entry)
+			stackEntry := f.parseStackEntry(e.FilePath, e.Message)
+			stack = append(stack, stackEntry)
 			current = e.Inner
 		} else {
 			stack = append(stack, struct {
@@ -284,6 +241,31 @@ func (f *yamlFormatter) FormatError(filepath string, message error, inner error)
 	return b.String()
 }
 
+// Helper method to parse FormatStack output into stack entry struct
+func (f *yamlFormatter) parseStackEntry(filepath string, message error) struct {
+	FilePath string
+	FuncPath string
+	Message  string
+} {
+	entry := struct {
+		FilePath string
+		FuncPath string
+		Message  string
+	}{}
+	if GetErrorConfig().ShowFilePath {
+		entry.FilePath = filepath
+	}
+	if message != nil {
+		entry.Message = message.Error()
+	}
+	if GetErrorConfig().ShowFuncName {
+		if e, ok := message.(*Error); ok {
+			entry.FuncPath = e.FuncPath
+		}
+	}
+	return entry
+}
+
 func (f *yamlFormatter) FormatStack(filepath string, message error) string {
 	var b strings.Builder
 	var hasField bool
@@ -329,58 +311,20 @@ type coloredFormatter struct {
 }
 
 func (f *coloredFormatter) FormatError(filepath string, message error, inner error) string {
-	var stack []struct {
-		FilePath string
-		FuncPath string
-		Message  string
-	}
+	var stack []string
 
 	// Add current error first
-	entry := struct {
-		FilePath string
-		FuncPath string
-		Message  string
-	}{}
-	if GetErrorConfig().ShowFilePath {
-		entry.FilePath = filepath
-	}
-	if message != nil {
-		entry.Message = message.Error()
-	}
-	if GetErrorConfig().ShowFuncName {
-		if e, ok := message.(*Error); ok {
-			entry.FuncPath = e.FuncPath
-		}
-	}
-	stack = append(stack, entry)
+	stack = append(stack, f.FormatStack(filepath, message))
 
 	// Add inner errors recursively
 	var current error = inner
 	var e *Error
 	for current != nil {
 		if As(current, &e) {
-			entry := struct {
-				FilePath string
-				FuncPath string
-				Message  string
-			}{}
-			if GetErrorConfig().ShowFilePath {
-				entry.FilePath = e.FilePath
-			}
-			if e.Message != nil {
-				entry.Message = e.Message.Error()
-			}
-			if GetErrorConfig().ShowFuncName {
-				entry.FuncPath = e.FuncPath
-			}
-			stack = append(stack, entry)
+			stack = append(stack, f.FormatStack(e.FilePath, e.Message))
 			current = e.Inner
 		} else {
-			stack = append(stack, struct {
-				FilePath string
-				FuncPath string
-				Message  string
-			}{Message: current.Error()})
+			stack = append(stack, "at "+f.config.MessageColor.Sprint(current.Error()))
 			break
 		}
 	}
@@ -397,20 +341,7 @@ func (f *coloredFormatter) FormatError(filepath string, message error, inner err
 		if i > 0 {
 			b.WriteString("\n  ")
 		}
-		b.WriteString("at ")
-		if GetErrorConfig().ShowFuncName && err.FuncPath != "" {
-			b.WriteString(f.config.InnerColor.Sprint(err.FuncPath))
-			b.WriteString(" ")
-		}
-		if GetErrorConfig().ShowFilePath && err.FilePath != "" {
-			b.WriteString(f.config.SourceColor.Sprint(err.FilePath))
-		}
-		if err.Message != "" {
-			if (GetErrorConfig().ShowFilePath && err.FilePath != "") || (GetErrorConfig().ShowFuncName && err.FuncPath != "") {
-				b.WriteString(": ")
-			}
-			b.WriteString(f.config.MessageColor.Sprint(err.Message))
-		}
+		b.WriteString(err)
 	}
 
 	return b.String()

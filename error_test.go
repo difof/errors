@@ -167,6 +167,11 @@ func TestErrorMessageOf(t *testing.T) {
 }
 
 func TestError_Each(t *testing.T) {
+	// Disable function names for this test
+	oldConfig := GetErrorConfig()
+	SetErrorConfig(WithShowFuncName(false))
+	defer SetErrorConfig(WithShowFuncName(oldConfig.ShowFuncName))
+
 	tests := []struct {
 		name     string
 		err      *Error

@@ -3,7 +3,6 @@ package errors
 import (
 	goerrors "errors"
 	"fmt"
-	"runtime"
 	"strings"
 )
 
@@ -30,7 +29,7 @@ type Error struct {
 func NewError(filepath string, message, inner error) *Error {
 	var funcPath string
 	if GetErrorConfig().ShowFuncName {
-		funcPath = getFuncPath()
+		funcPath = getCallerPath(1)
 	}
 
 	return &Error{
@@ -39,43 +38,6 @@ func NewError(filepath string, message, inner error) *Error {
 		Message:  message,
 		Inner:    inner,
 	}
-}
-
-// getFuncPath returns the function path of the first non-errors package caller
-func getFuncPath() string {
-	for skip := 0; skip < 10; skip++ {
-		pc, ok := getCallerPC(skip)
-		if !ok {
-			break
-		}
-
-		fn := runtime.FuncForPC(pc)
-		if fn == nil {
-			continue
-		}
-
-		name := fn.Name()
-		if isInternalFunc(name) {
-			continue
-		}
-
-		if GetErrorConfig().ShowPackageName {
-			return name
-		}
-		return stripPackageName(name)
-	}
-	return ""
-}
-
-// getCallerPC returns the program counter for the given skip level
-func getCallerPC(skip int) (uintptr, bool) {
-	pc, _, _, ok := runtime.Caller(skip)
-	return pc, ok
-}
-
-// isInternalFunc returns true if the function name is from our package or runtime
-func isInternalFunc(name string) bool {
-	return strings.Contains(name, "github.com/difof/errors") || strings.HasPrefix(name, "runtime.")
 }
 
 // ErrorMessageOf returns the innermost error message of the error chain.

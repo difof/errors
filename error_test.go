@@ -1,6 +1,7 @@
 package errors
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -461,4 +462,98 @@ func TestError_As(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestError_JSON(t *testing.T) {
+	err := NewError("test.go:42", fmt.Errorf("test error"), fmt.Errorf("inner error"))
+	got := err.JSON()
+
+	t.Logf("JSON output: %q", got)
+
+	// Verify it's valid JSON
+	var data map[string]interface{}
+	if err := json.Unmarshal([]byte(got), &data); err != nil {
+		t.Fatalf("Failed to parse JSON: %v", err)
+	}
+
+	// Verify expected fields
+	if source, ok := data["source"].(string); !ok || source != "test.go:42" {
+		t.Errorf("Expected source test.go:42, got %v", data["source"])
+	}
+	if msg, ok := data["message"].(string); !ok || msg != "test error" {
+		t.Errorf("Expected message 'test error', got %v", data["message"])
+	}
+	if inner, ok := data["inner"].(string); !ok || inner != "inner error" {
+		t.Errorf("Expected inner 'inner error', got %v", data["inner"])
+	}
+}
+
+func TestError_YAML(t *testing.T) {
+	err := NewError("test.go:42", fmt.Errorf("test error"), fmt.Errorf("inner error"))
+	got := err.YAML()
+
+	// Verify YAML structure (should be multiple documents)
+	expected := []string{
+		"source: test.go:42",
+		"message: test error",
+		"inner error", // The inner error is a standard error, so it's just the message
+	}
+
+	for _, want := range expected {
+		if !strings.Contains(got, want) {
+			t.Errorf("YAML output missing %q", want)
+		}
+	}
+}
+
+func TestError_Colored(t *testing.T) {
+	err := NewError("test.go:42", fmt.Errorf("test error"), fmt.Errorf("inner error"))
+	got := err.Colored()
+
+	// Verify color codes are present
+	if !strings.Contains(got, colorBlue) {
+		t.Error("Source color not found in output")
+	}
+	if !strings.Contains(got, colorRed) {
+		t.Error("Message color not found in output")
+	}
+	if !strings.Contains(got, colorYellow) {
+		t.Error("Inner error color not found in output")
+	}
+	if !strings.Contains(got, colorReset) {
+		t.Error("Color reset code not found in output")
+	}
+
+	// Verify error content
+	uncolored := stripColors(got)
+	expected := []string{
+		"test.go:42: test error",
+		"inner error",
+	}
+
+	for _, want := range expected {
+		if !strings.Contains(uncolored, want) {
+			t.Errorf("Colored output missing %q", want)
+		}
+	}
+}
+
+// stripColors removes ANSI color codes from a string
+func stripColors(s string) string {
+	var b strings.Builder
+	inEscape := false
+	for _, r := range s {
+		if r == '\033' {
+			inEscape = true
+			continue
+		}
+		if inEscape {
+			if r == 'm' {
+				inEscape = false
+			}
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }

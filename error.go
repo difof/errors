@@ -116,29 +116,17 @@ func (e *Error) String() string {
 
 // JSON returns a JSON formatted representation of the error
 func (e *Error) JSON() string {
-	oldFormatter := GetFormatter()
-	SetFormatter(JSONFormatter(DefaultJSONConfig()))
-	defer SetFormatter(oldFormatter)
-
-	return e.Error()
+	return JSONFormatter(DefaultJSONConfig()).FormatError(e.Source, e.Message, e.Inner)
 }
 
 // YAML returns a YAML formatted representation of the error
 func (e *Error) YAML() string {
-	oldFormatter := GetFormatter()
-	SetFormatter(YAMLFormatter(DefaultYAMLConfig()))
-	defer SetFormatter(oldFormatter)
-
-	return e.Error()
+	return YAMLFormatter(DefaultYAMLConfig()).FormatError(e.Source, e.Message, e.Inner)
 }
 
 // Colored returns a colored representation of the error for terminal output
 func (e *Error) Colored() string {
-	oldFormatter := GetFormatter()
-	SetFormatter(ColoredFormatter(DefaultColorConfig()))
-	defer SetFormatter(oldFormatter)
-
-	return e.Error()
+	return ColoredFormatter(DefaultColorConfig()).FormatError(e.Source, e.Message, e.Inner)
 }
 
 // ErrorMessage returns the innermost error message without source location

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"sync/atomic"
+	"sync"
 )
 
 // Formatter interface for custom formatting
@@ -189,11 +189,13 @@ var (
 	// defaultFormatter is the text formatter used by default
 	defaultFormatter = TextFormatter(DefaultTextConfig())
 	// currentFormatter holds the current global formatter
-	currentFormatter atomic.Value
+	currentFormatter = defaultFormatter
+	// formatterMutex protects access to currentFormatter
+	formatterMutex sync.RWMutex
 )
 
 func init() {
-	currentFormatter.Store(defaultFormatter)
+	currentFormatter = defaultFormatter
 }
 
 // SetFormatter sets a custom formatter for all new errors
@@ -201,12 +203,16 @@ func SetFormatter(f Formatter) {
 	if f == nil {
 		f = defaultFormatter
 	}
-	currentFormatter.Store(f)
+	formatterMutex.Lock()
+	currentFormatter = f
+	formatterMutex.Unlock()
 }
 
 // GetFormatter returns the current global formatter
 func GetFormatter() Formatter {
-	return currentFormatter.Load().(Formatter)
+	formatterMutex.RLock()
+	defer formatterMutex.RUnlock()
+	return currentFormatter
 }
 
 // DefaultTextConfig returns the default configuration for text formatter

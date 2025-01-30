@@ -5,9 +5,9 @@ vars:
     sh: find . -type f -name '*.go'
   TEST_TIMEOUT: 30s
   PACKAGE_NAME: .
-  COVERAGE_FILE: coverage.out
-  COVERAGE_HTML: coverage.html
-  COVERAGE_LCOV: coverage.lcov
+  COVERAGE_FILE: out/coverage.out
+  COVERAGE_HTML: out/coverage.html
+  COVERAGE_LCOV: out/coverage.lcov
   # PACKAGE_NAME: github.com/difof/errors
 
 tasks:
@@ -111,3 +111,14 @@ tasks:
         echo "Installing gocov..."
         go install github.com/axw/gocov/gocov@latest
       fi
+
+  build:demo:
+    desc: Build the formatter demo
+    silent: true
+    cmd: go build -o out/formatter_demo ./cmd/formatter_demo.go
+
+  run:demo:
+    desc: Run the formatter demo
+    silent: true
+    deps: [build:demo]
+    cmd: ./out/formatter_demo

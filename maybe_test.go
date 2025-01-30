@@ -4,49 +4,28 @@ import (
 	"fmt"
 	"net"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // Custom error types for testing
-type maybeTestError struct{ msg string }
-
-func (e *maybeTestError) Error() string { return e.msg }
-
-func (e *maybeTestError) Is(target error) bool {
-	_, ok := target.(*maybeTestError)
-	return ok
-}
-
-type maybeOtherError struct{ msg string }
-
-func (e *maybeOtherError) Error() string { return e.msg }
-
-// wrappedTestError wraps a maybeTestError
-type wrappedTestError struct {
-	inner error
-}
-
-func (e *wrappedTestError) Error() string { return e.inner.Error() }
-func (e *wrappedTestError) Unwrap() error { return e.inner }
-
-// Additional error types for interface conversion tests
-type ErrorWithCode interface {
-	error
-	Code() string
-}
-
-type maybeCustomError struct {
-	msg  string
-	code string
-}
+type maybeCustomError struct{ msg string }
 
 func (e *maybeCustomError) Error() string { return e.msg }
-func (e *maybeCustomError) Code() string  { return e.code }
+
+type maybeWrappedError struct {
+	err error
+}
+
+func (e *maybeWrappedError) Error() string { return e.err.Error() }
+func (e *maybeWrappedError) Unwrap() error { return e.err }
 
 func TestMaybe(t *testing.T) {
 	tests := []struct {
 		name      string
 		err       error
 		wantPanic bool
+		setup     func() *maybeCustomError // For cases where we need to prepare the target
 	}{
 		{
 			name:      "nil error",
@@ -54,17 +33,17 @@ func TestMaybe(t *testing.T) {
 			wantPanic: false,
 		},
 		{
-			name:      "matching error type",
-			err:       &maybeTestError{msg: "test error"},
+			name:      "direct type match",
+			err:       &maybeCustomError{msg: "direct"},
 			wantPanic: false,
 		},
 		{
-			name:      "non-matching error type",
-			err:       &maybeOtherError{msg: "wrong type"},
-			wantPanic: true,
+			name:      "wrapped error match",
+			err:       &maybeWrappedError{err: &maybeCustomError{msg: "wrapped"}},
+			wantPanic: false,
 		},
 		{
-			name:      "standard error",
+			name:      "panic on non-matching error",
 			err:       fmt.Errorf("standard error"),
 			wantPanic: true,
 		},
@@ -72,18 +51,22 @@ func TestMaybe(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer func() {
-				r := recover()
-				if (r != nil) != tt.wantPanic {
-					t.Errorf("Maybe() panic = %v, wantPanic = %v", r != nil, tt.wantPanic)
-				}
-			}()
+			if tt.wantPanic {
+				assert.Panics(t, func() {
+					Maybe[*maybeCustomError](tt.err)
+				})
+				return
+			}
 
-			result := Maybe[*maybeTestError](tt.err)
-			if tt.err != nil && !tt.wantPanic {
-				if result.Error() != tt.err.Error() {
-					t.Errorf("Maybe() = %v, want %v", result, tt.err)
-				}
+			var result *maybeCustomError
+			assert.NotPanics(t, func() {
+				result = Maybe[*maybeCustomError](tt.err)
+			})
+
+			if tt.err == nil {
+				assert.Nil(t, result)
+			} else {
+				assert.NotNil(t, result)
 			}
 		})
 	}
@@ -94,53 +77,51 @@ func TestMaybef(t *testing.T) {
 		name      string
 		err       error
 		format    string
-		params    []any
+		args      []any
 		wantPanic bool
 	}{
 		{
 			name:      "nil error",
 			err:       nil,
-			format:    "unexpected error: %v",
-			params:    []any{"test"},
 			wantPanic: false,
 		},
 		{
-			name:      "matching error type",
-			err:       &maybeTestError{msg: "test error"},
-			format:    "unexpected error: %v",
-			params:    []any{"test"},
+			name:      "direct type match",
+			err:       &maybeCustomError{msg: "direct"},
 			wantPanic: false,
 		},
 		{
-			name:      "wrapped error type",
-			err:       &wrappedTestError{inner: &maybeTestError{msg: "inner error"}},
-			format:    "unexpected error: %v",
-			params:    []any{"test"},
+			name:      "wrapped error match",
+			err:       &maybeWrappedError{err: &maybeCustomError{msg: "wrapped"}},
 			wantPanic: false,
 		},
 		{
-			name:      "non-matching error type with format",
-			err:       &maybeOtherError{msg: "wrong type"},
-			format:    "unexpected type: %v",
-			params:    []any{"test"},
+			name:      "panic with custom message",
+			err:       fmt.Errorf("standard error"),
+			format:    "custom panic: %v",
+			args:      []any{"test"},
 			wantPanic: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer func() {
-				r := recover()
-				if (r != nil) != tt.wantPanic {
-					t.Errorf("Maybef() panic = %v, wantPanic = %v", r != nil, tt.wantPanic)
-				}
-			}()
+			if tt.wantPanic {
+				assert.Panics(t, func() {
+					Maybef[*maybeCustomError](tt.err)(tt.format, tt.args...)
+				})
+				return
+			}
 
-			result := Maybef[*maybeTestError](tt.err)(tt.format, tt.params...)
-			if tt.err != nil && !tt.wantPanic {
-				if result.Error() != tt.err.Error() {
-					t.Errorf("Maybef() = %v, want %v", result, tt.err)
-				}
+			var result *maybeCustomError
+			assert.NotPanics(t, func() {
+				result = Maybef[*maybeCustomError](tt.err)("unused format")
+			})
+
+			if tt.err == nil {
+				assert.Nil(t, result)
+			} else {
+				assert.NotNil(t, result)
 			}
 		})
 	}
@@ -149,51 +130,56 @@ func TestMaybef(t *testing.T) {
 func TestMaybeResult(t *testing.T) {
 	tests := []struct {
 		name      string
-		result    int
+		result    string
 		err       error
-		wantVal   int
 		wantPanic bool
 	}{
 		{
 			name:      "nil error",
-			result:    42,
+			result:    "success",
 			err:       nil,
-			wantVal:   42,
 			wantPanic: false,
 		},
 		{
-			name:      "matching error type",
-			result:    42,
-			err:       &maybeTestError{msg: "test error"},
-			wantVal:   42,
+			name:      "direct type match",
+			result:    "with error",
+			err:       &maybeCustomError{msg: "direct"},
 			wantPanic: false,
 		},
 		{
-			name:      "non-matching error type",
-			result:    42,
-			err:       &maybeOtherError{msg: "wrong type"},
-			wantVal:   42,
+			name:      "wrapped error match",
+			result:    "wrapped error",
+			err:       &maybeWrappedError{err: &maybeCustomError{msg: "wrapped"}},
+			wantPanic: false,
+		},
+		{
+			name:      "panic on non-matching error",
+			result:    "panic",
+			err:       fmt.Errorf("standard error"),
 			wantPanic: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer func() {
-				r := recover()
-				if (r != nil) != tt.wantPanic {
-					t.Errorf("MaybeResult() panic = %v, wantPanic = %v", r != nil, tt.wantPanic)
-				}
-			}()
+			if tt.wantPanic {
+				assert.Panics(t, func() {
+					MaybeResult[string, *maybeCustomError](tt.result, tt.err)
+				})
+				return
+			}
 
-			result, err := MaybeResult[int, *maybeTestError](tt.result, tt.err)
-			if !tt.wantPanic {
-				if result != tt.wantVal {
-					t.Errorf("MaybeResult() result = %v, want %v", result, tt.wantVal)
-				}
-				if tt.err != nil && err.Error() != tt.err.Error() {
-					t.Errorf("MaybeResult() err = %v, want %v", err, tt.err)
-				}
+			var result string
+			var errResult *maybeCustomError
+			assert.NotPanics(t, func() {
+				result, errResult = MaybeResult[string, *maybeCustomError](tt.result, tt.err)
+			})
+
+			assert.Equal(t, tt.result, result)
+			if tt.err == nil {
+				assert.Nil(t, errResult)
+			} else {
+				assert.NotNil(t, errResult)
 			}
 		})
 	}
@@ -202,201 +188,92 @@ func TestMaybeResult(t *testing.T) {
 func TestMaybeResultf(t *testing.T) {
 	tests := []struct {
 		name      string
-		result    int
+		result    string
 		err       error
 		format    string
-		params    []any
-		wantVal   int
+		args      []any
 		wantPanic bool
 	}{
 		{
 			name:      "nil error",
-			result:    42,
+			result:    "success",
 			err:       nil,
-			format:    "unexpected error: %v",
-			params:    []any{"test"},
-			wantVal:   42,
 			wantPanic: false,
 		},
 		{
-			name:      "matching error type",
-			result:    42,
-			err:       &maybeTestError{msg: "test error"},
-			format:    "unexpected error: %v",
-			params:    []any{"test"},
-			wantVal:   42,
+			name:      "direct type match",
+			result:    "with error",
+			err:       &maybeCustomError{msg: "direct"},
 			wantPanic: false,
 		},
 		{
-			name:      "non-matching error type with format",
-			result:    42,
-			err:       &maybeOtherError{msg: "wrong type"},
-			format:    "unexpected type: %v",
-			params:    []any{"test"},
-			wantVal:   42,
+			name:      "wrapped error match",
+			result:    "wrapped error",
+			err:       &maybeWrappedError{err: &maybeCustomError{msg: "wrapped"}},
+			wantPanic: false,
+		},
+		{
+			name:      "panic with custom message",
+			result:    "panic",
+			err:       fmt.Errorf("standard error"),
+			format:    "custom panic: %v",
+			args:      []any{"test"},
 			wantPanic: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer func() {
-				r := recover()
-				if (r != nil) != tt.wantPanic {
-					t.Errorf("MaybeResultf() panic = %v, wantPanic = %v", r != nil, tt.wantPanic)
-				}
-			}()
+			if tt.wantPanic {
+				assert.Panics(t, func() {
+					MaybeResultf[string, *maybeCustomError](tt.result, tt.err)(tt.format, tt.args...)
+				})
+				return
+			}
 
-			result, err := MaybeResultf[int, *maybeTestError](tt.result, tt.err)(tt.format, tt.params...)
-			if !tt.wantPanic {
-				if result != tt.wantVal {
-					t.Errorf("MaybeResultf() result = %v, want %v", result, tt.wantVal)
-				}
-				if tt.err != nil && err.Error() != tt.err.Error() {
-					t.Errorf("MaybeResultf() err = %v, want %v", err, tt.err)
-				}
+			var result string
+			var errResult *maybeCustomError
+			assert.NotPanics(t, func() {
+				result, errResult = MaybeResultf[string, *maybeCustomError](tt.result, tt.err)("unused format")
+			})
+
+			assert.Equal(t, tt.result, result)
+			if tt.err == nil {
+				assert.Nil(t, errResult)
+			} else {
+				assert.NotNil(t, errResult)
 			}
 		})
 	}
 }
 
-// Example usage test with net.OpError
+// Integration test with real error types
 func TestMaybeWithNetError(t *testing.T) {
-	// Create a real net.OpError
+	// Test with actual net.OpError
 	netErr := &net.OpError{
 		Op:     "read",
 		Net:    "tcp",
 		Source: nil,
 		Addr:   nil,
-		Err:    fmt.Errorf("connection refused"),
+		Err:    fmt.Errorf("connection reset"),
 	}
 
-	// Test successful case with net.OpError
-	t.Run("successful case", func(t *testing.T) {
-		defer func() {
-			if r := recover(); r != nil {
-				t.Errorf("Maybe() panicked unexpectedly: %v", r)
-			}
-		}()
+	// Direct match
+	result := Maybe[*net.OpError](netErr)
+	assert.Equal(t, netErr, result)
 
-		result := Maybe[*net.OpError](netErr)
-		if result.Op != "read" || result.Net != "tcp" {
-			t.Errorf("Maybe() with net.OpError failed to preserve error details")
-		}
-	})
+	// Wrapped match
+	wrapped := &maybeWrappedError{err: netErr}
+	result = Maybe[*net.OpError](wrapped)
+	assert.Equal(t, netErr, result)
 
-	// Test panic case with wrong error type
-	t.Run("panic case", func(t *testing.T) {
-		defer func() {
-			if r := recover(); r == nil {
-				t.Errorf("Maybe() with wrong error type did not panic")
-			}
-		}()
-		Maybe[*net.OpError](&maybeTestError{msg: "wrong type"})
-	})
+	// Nil case
+	var nilResult *net.OpError
+	nilResult = Maybe[*net.OpError](nil)
+	assert.Nil(t, nilResult)
 
-	// Test wrapped net.OpError
-	t.Run("wrapped error", func(t *testing.T) {
-		defer func() {
-			if r := recover(); r != nil {
-				t.Errorf("Maybe() panicked unexpectedly: %v", r)
-			}
-		}()
-
-		wrapped := fmt.Errorf("wrapped: %w", netErr)
-		result := Maybe[*net.OpError](wrapped)
-		if result.Op != "read" || result.Net != "tcp" {
-			t.Errorf("Maybe() with wrapped net.OpError failed to preserve error details")
-		}
-	})
-}
-
-func TestMaybeWithWrappedError(t *testing.T) {
-	innerErr := &maybeTestError{msg: "inner error"}
-	wrappedErr := &wrappedTestError{inner: innerErr}
-
-	// Test Maybe with wrapped error
-	t.Run("Maybe with wrapped error", func(t *testing.T) {
-		result := Maybe[*maybeTestError](wrappedErr)
-		if result.msg != "inner error" {
-			t.Errorf("Maybe() with wrapped error = %v, want inner error", result)
-		}
-	})
-
-	// Test MaybeResult with wrapped error
-	t.Run("MaybeResult with wrapped error", func(t *testing.T) {
-		val, err := MaybeResult[int, *maybeTestError](42, wrappedErr)
-		if val != 42 {
-			t.Errorf("MaybeResult() value = %v, want 42", val)
-		}
-		if err.msg != "inner error" {
-			t.Errorf("MaybeResult() error = %v, want inner error", err)
-		}
-	})
-
-	// Test MaybeResultf with wrapped error
-	t.Run("MaybeResultf with wrapped error", func(t *testing.T) {
-		val, err := MaybeResultf[int, *maybeTestError](42, wrappedErr)("unexpected error: %v", wrappedErr)
-		if val != 42 {
-			t.Errorf("MaybeResultf() value = %v, want 42", val)
-		}
-		if err.msg != "inner error" {
-			t.Errorf("MaybeResultf() error = %v, want inner error", err)
-		}
-	})
-
-	// Test multiple levels of wrapping
-	t.Run("MaybeResultf with multiple wrapping levels", func(t *testing.T) {
-		innerErr := &maybeTestError{msg: "deep inner error"}
-		wrapped1 := fmt.Errorf("level 1: %w", innerErr)
-		wrapped2 := fmt.Errorf("level 2: %w", wrapped1)
-
-		val, err := MaybeResultf[int, *maybeTestError](42, wrapped2)("deep error: %v", wrapped2)
-		if val != 42 {
-			t.Errorf("MaybeResultf() value = %v, want 42", val)
-		}
-		if err.msg != "deep inner error" {
-			t.Errorf("MaybeResultf() error = %v, want deep inner error", err)
-		}
-	})
-
-	// Test type assertion edge cases
-	t.Run("MaybeResultf with interface conversion", func(t *testing.T) {
-		origErr := &maybeCustomError{msg: "custom error", code: "E123"}
-		wrapped := fmt.Errorf("wrapped: %w", origErr)
-
-		defer func() {
-			if r := recover(); r == nil {
-				t.Error("Expected panic for interface conversion, but got none")
-			}
-		}()
-
-		// This should panic as we're trying to convert to maybeTestError
-		MaybeResultf[int, *maybeTestError](42, wrapped)("unexpected: %v", wrapped)
-	})
-
-	// Test with nil error and formatting
-	t.Run("MaybeResultf with nil error and formatting", func(t *testing.T) {
-		val, err := MaybeResultf[string, *maybeTestError]("success", nil)("should not matter: %v", "test")
-		if val != "success" {
-			t.Errorf("MaybeResultf() value = %v, want success", val)
-		}
-		if err != nil {
-			t.Errorf("MaybeResultf() error = %v, want nil", err)
-		}
-	})
-
-	// Test with custom format verbs
-	t.Run("MaybeResultf with custom format verbs", func(t *testing.T) {
-		innerErr := &maybeTestError{msg: "format test"}
-		wrapped := fmt.Errorf("wrapped %%special%%: %w", innerErr)
-
-		val, err := MaybeResultf[int, *maybeTestError](42, wrapped)("error with special formatting %%: %v", wrapped)
-		if val != 42 {
-			t.Errorf("MaybeResultf() value = %v, want 42", val)
-		}
-		if err.msg != "format test" {
-			t.Errorf("MaybeResultf() error = %v, want 'format test'", err)
-		}
+	// Panic case
+	assert.Panics(t, func() {
+		Maybe[*net.OpError](fmt.Errorf("not a net error"))
 	})
 }

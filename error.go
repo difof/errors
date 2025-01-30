@@ -2,7 +2,6 @@ package errors
 
 import (
 	goerrors "errors"
-	"fmt"
 	"strings"
 )
 
@@ -112,10 +111,34 @@ func (e *Error) StackTrace() (list []string) {
 // combining the source location and error message if present.
 // If there's no message, only the source is returned.
 func (e *Error) String() string {
-	if e.Message == nil {
-		return e.Source
-	}
-	return fmt.Sprintf("%v: %v", e.Source, e.Message)
+	return GetFormatter().FormatError(e.Source, e.Message, e.Inner)
+}
+
+// JSON returns a JSON formatted representation of the error
+func (e *Error) JSON() string {
+	oldFormatter := GetFormatter()
+	SetFormatter(JSONFormatter(DefaultJSONConfig()))
+	defer SetFormatter(oldFormatter)
+
+	return e.Error()
+}
+
+// YAML returns a YAML formatted representation of the error
+func (e *Error) YAML() string {
+	oldFormatter := GetFormatter()
+	SetFormatter(YAMLFormatter(DefaultYAMLConfig()))
+	defer SetFormatter(oldFormatter)
+
+	return e.Error()
+}
+
+// Colored returns a colored representation of the error for terminal output
+func (e *Error) Colored() string {
+	oldFormatter := GetFormatter()
+	SetFormatter(ColoredFormatter(DefaultColorConfig()))
+	defer SetFormatter(oldFormatter)
+
+	return e.Error()
 }
 
 // ErrorMessage returns the innermost error message without source location

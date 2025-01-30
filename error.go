@@ -62,12 +62,11 @@ func (e *Error) ExtractEntries() []Error {
 	e.Each(func(err error) bool {
 		var e *Error
 		if As(err, &e) {
-			entries = append(entries, *e)
-
 			if e.Message != nil {
-				// TODO: what if the message itself is an Error?!
 				e.MessageString = e.Message.Error()
 			}
+
+			entries = append(entries, *e)
 		}
 		return true
 	})
@@ -100,7 +99,7 @@ func (e *Error) Each(it func(err error) bool) {
 		if As(current, &cast) {
 			current = cast.Unwrap()
 		} else {
-			current = nil
+			break
 		}
 	}
 }

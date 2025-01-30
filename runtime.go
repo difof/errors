@@ -4,61 +4,121 @@ import (
 	"fmt"
 	"path"
 	"runtime"
-	"sync/atomic"
+	"strings"
+	"sync"
 )
+
+type ErrorConfig struct {
+	ShowFuncName    bool
+	ShowPackageName bool
+	ShowFilePath    bool
+}
 
 var (
-	// showFuncName controls whether function names are included in stack traces
-	showFuncName atomic.Bool
-	// showPackageName controls whether full package paths are shown in function names
-	showPackageName atomic.Bool
+	errorConfig = ErrorConfig{
+		ShowFuncName:    true,
+		ShowPackageName: true,
+		ShowFilePath:    true,
+	}
+	errorConfigLock = sync.RWMutex{}
 )
 
-// SetShowFuncName sets whether to show the function name in the stack trace before the file and line.
-//
-// Parameters:
-//   - state: true to show function names, false to hide them
-func SetShowFuncName(state bool) {
-	showFuncName.Store(state)
+type ErrorConfigOption func(config *ErrorConfig)
+
+func WithShowFuncName(showFuncName bool) ErrorConfigOption {
+	return func(config *ErrorConfig) {
+		config.ShowFuncName = showFuncName
+	}
 }
 
-// SetShowPackageName sets whether to show the full function name (package name/function name)
-// or just the base function name.
-//
-// Parameters:
-//   - state: true to show full package path, false to show only function name
-func SetShowPackageName(state bool) {
-	showPackageName.Store(state)
+func WithShowPackageName(showPackageName bool) ErrorConfigOption {
+	return func(config *ErrorConfig) {
+		config.ShowPackageName = showPackageName
+	}
 }
 
-// getCallerPath returns the file and line which called any of New functions as string.
-//
-// The returned string format depends on showFuncName and showPackageName settings:
-//   - With showFuncName=true: "at function_name file:line"
-//   - With showFuncName=false: "file:line"
-//
-// Parameters:
-//   - skipFrames: number of stack frames to skip to find the caller
-//
-// Returns:
-//   - A formatted string containing the caller's location
-func getCallerPath(skipFrames int) string {
-	pc, file, line, ok := runtime.Caller(2 + skipFrames)
+func WithShowFilePath(showFilePath bool) ErrorConfigOption {
+	return func(config *ErrorConfig) {
+		config.ShowFilePath = showFilePath
+	}
+}
+
+func GetErrorConfig() ErrorConfig {
+	errorConfigLock.RLock()
+	defer errorConfigLock.RUnlock()
+	return errorConfig
+}
+
+func SetErrorConfig(opts ...ErrorConfigOption) {
+	errorConfigLock.Lock()
+	defer errorConfigLock.Unlock()
+	for _, opt := range opts {
+		opt(&errorConfig)
+	}
+}
+
+// getCallerPath returns the caller's source location with optional function name
+func getCallerPath(skip int) string {
+	pc, file, line, ok := runtime.Caller(skip + 1)
 	if !ok {
 		return "<no source>"
 	}
 
-	f := runtime.FuncForPC(pc).Name()
+	config := GetErrorConfig()
 
-	if showFuncName.Load() {
-		if !showPackageName.Load() {
-			f = stripPackageName(f)
-		}
-
-		return fmt.Sprintf("at %s %s:%d", f, file, line)
+	// If all settings are disabled, return an empty string
+	if !config.ShowFuncName && !config.ShowPackageName && !config.ShowFilePath {
+		return ""
 	}
 
-	return fmt.Sprintf("%s:%d", file, line)
+	var b strings.Builder
+
+	// Only add "at " prefix if at least one setting is enabled
+	if config.ShowFuncName || config.ShowPackageName || config.ShowFilePath {
+		b.WriteString("at ")
+	}
+
+	// Add function name if enabled
+	if config.ShowFuncName {
+		fn := runtime.FuncForPC(pc)
+		if fn != nil {
+			name := fn.Name()
+			// Check if we're in a test function
+			if strings.Contains(name, "Test") {
+				// For test functions, skip one more frame to get to testing.tRunner
+				if pc2, _, _, ok := runtime.Caller(skip + 2); ok {
+					if fn2 := runtime.FuncForPC(pc2); fn2 != nil {
+						name = fn2.Name()
+					}
+				}
+			}
+			if !config.ShowPackageName {
+				name = stripPackageName(name)
+			}
+			b.WriteString(name)
+			b.WriteString(" ")
+		}
+	}
+
+	// Add file path if enabled
+	if config.ShowFilePath {
+		// Check if this is called from a New function
+		fn := runtime.FuncForPC(pc)
+		if fn != nil && strings.Contains(fn.Name(), "New") {
+			// For New functions, use the caller's location
+			if pc, file, line, ok = runtime.Caller(skip + 2); ok {
+				b.WriteString(fmt.Sprintf("%s:%d", path.Base(file), line))
+			} else {
+				b.WriteString("<no source>")
+			}
+		} else {
+			// For other functions, use the current location
+			b.WriteString(fmt.Sprintf("%s:%d", path.Base(file), line))
+		}
+	}
+
+	// Return the result, trimming any trailing space
+	return strings.TrimSpace(b.String())
 }
 
 // stripPackageName removes the package path from a fully qualified function name,

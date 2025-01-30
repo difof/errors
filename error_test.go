@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-
-	"github.com/fatih/color"
 )
 
 func createNestedServiceError() error {
@@ -96,34 +94,39 @@ func TestNewError(t *testing.T) {
 		{
 			name:    "basic error",
 			source:  "test.go:42",
-			message: fmt.Errorf("test message"),
-			inner:   nil,
+			message: fmt.Errorf("test error"),
 		},
 		{
 			name:    "with inner error",
 			source:  "test.go:42",
-			message: fmt.Errorf("outer message"),
-			inner:   fmt.Errorf("inner message"),
+			message: fmt.Errorf("outer error"),
+			inner:   fmt.Errorf("inner error"),
 		},
 		{
 			name:    "nil message",
 			source:  "test.go:42",
 			message: nil,
-			inner:   nil,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := NewError(tt.source, tt.message, tt.inner)
-			if err.Source != tt.source {
-				t.Errorf("NewError().Source = %v, want %v", err.Source, tt.source)
+
+			if err == nil {
+				t.Fatal("NewError() returned nil")
 			}
-			if err.Message != tt.message {
-				t.Errorf("NewError().Message = %v, want %v", err.Message, tt.message)
+
+			if err.FilePath != tt.source {
+				t.Errorf("NewError() source = %v, want %v", err.FilePath, tt.source)
 			}
-			if err.Inner != tt.inner {
-				t.Errorf("NewError().Inner = %v, want %v", err.Inner, tt.inner)
+
+			if tt.message != nil && err.Message.Error() != tt.message.Error() {
+				t.Errorf("NewError() message = %v, want %v", err.Message, tt.message)
+			}
+
+			if tt.inner != nil && err.Inner.Error() != tt.inner.Error() {
+				t.Errorf("NewError() inner = %v, want %v", err.Inner, tt.inner)
 			}
 		})
 	}
@@ -397,81 +400,76 @@ func TestError_As(t *testing.T) {
 }
 
 func TestError_JSON(t *testing.T) {
-	source := "test.go:42"
-	message := fmt.Errorf("test error")
-	inner := fmt.Errorf("inner error")
-	err := NewError(source, message, inner)
+	e := NewError("test.go:42", fmt.Errorf("test error"), NewError("inner.go:24", fmt.Errorf("inner error"), nil))
 
-	got := err.JSON()
+	got := e.JSON()
 	t.Logf("JSON output: %q", got)
 
-	// Parse JSON output
+	// Verify JSON structure
 	var stack []struct {
-		Source  string `json:"source"`
-		Message string `json:"message"`
+		FilePath string `json:"filepath"`
+		FuncPath string `json:"funcpath"`
+		Message  string `json:"message"`
 	}
 	if err := json.Unmarshal([]byte(got), &stack); err != nil {
 		t.Fatalf("Failed to parse JSON: %v", err)
 	}
 
-	// Verify structure
 	if len(stack) != 2 {
 		t.Fatalf("Expected 2 errors in stack, got %d", len(stack))
 	}
 
-	// Root cause should be first
+	if stack[0].FilePath != "inner.go:24" {
+		t.Errorf("Expected filepath inner.go:24, got %s", stack[0].FilePath)
+	}
 	if stack[0].Message != "inner error" {
-		t.Errorf("Expected message 'inner error', got %v", stack[0].Message)
+		t.Errorf("Expected message inner error, got %s", stack[0].Message)
 	}
 
-	// Outer error should be second
-	if stack[1].Source != source {
-		t.Errorf("Expected source %v, got %v", source, stack[1].Source)
+	if stack[1].FilePath != "test.go:42" {
+		t.Errorf("Expected filepath test.go:42, got %s", stack[1].FilePath)
 	}
-	if stack[1].Message != message.Error() {
-		t.Errorf("Expected inner %v, got %v", message.Error(), stack[1].Message)
+	if stack[1].Message != "test error" {
+		t.Errorf("Expected message test error, got %s", stack[1].Message)
 	}
 }
 
 func TestError_YAML(t *testing.T) {
-	err := NewError("test.go:42", fmt.Errorf("test error"), fmt.Errorf("inner error"))
-	got := err.YAML()
+	e := NewError("test.go:42", fmt.Errorf("test error"), NewError("inner.go:24", fmt.Errorf("inner error"), nil))
 
-	// Verify YAML structure (should be multiple documents)
-	expected := []string{
-		"source: test.go:42",
-		"message: test error",
-		"inner error", // The inner error is a standard error, so it's just the message
+	got := e.YAML()
+	t.Logf("YAML output: %s", got)
+
+	want := []string{
+		"errors:",
+		"  - filepath: inner.go:24",
+		"    message: inner error",
+		"  - filepath: test.go:42",
+		"    message: test error",
 	}
 
-	for _, want := range expected {
-		if !strings.Contains(got, want) {
-			t.Errorf("YAML output missing %q", want)
+	for _, line := range want {
+		if !strings.Contains(got, line) {
+			t.Errorf("YAML output missing %q", line)
 		}
 	}
 }
 
 func TestError_Colored(t *testing.T) {
-	// Save color state and restore after test
-	oldNoColor := color.NoColor
-	defer func() { color.NoColor = oldNoColor }()
-	color.NoColor = false
-
-	inner := fmt.Errorf("inner error")
-	e := NewError("test.go:42", fmt.Errorf("test error"), inner)
+	e := NewError("test.go:42", fmt.Errorf("test error"), nil)
 
 	got := e.Colored()
 	stripped := stripColors(got)
 
 	// Verify the format matches the standard text format
-	want := "inner error\n  test.go:42: test error"
+	want := "at test.go:42: test error"
 	if stripped != want {
 		t.Errorf("Colored output after stripping colors = %q, want %q", stripped, want)
 	}
 
 	// Verify colored content is present
-	if !strings.Contains(got, "inner error") {
-		t.Error("Colored output missing \"inner error\"")
+	if !strings.Contains(got, "test error") {
+		t.Error("Colored output missing \"test error\"")
 	}
 	if !strings.Contains(got, "test.go:42") {
 		t.Error("Colored output missing \"test.go:42\"")

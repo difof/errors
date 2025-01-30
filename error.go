@@ -3,32 +3,49 @@ package errors
 import (
 	goerrors "errors"
 	"fmt"
+	"runtime"
 	"strings"
 )
 
 // Error is a lightweight drop-in replacement for standard errors package with stacktrace.
 //
 // It provides enhanced error handling capabilities by maintaining:
-//   - Source: The location where the error occurred (file:line)
+//   - FilePath: The file path where the error occurred (file:line)
+//   - FuncPath: The function path where the error occurred (package.function)
 //   - Message: The actual error message
 //   - Inner: The wrapped/underlying error for error chaining
 type Error struct {
-	Source  string
-	Message error
-	Inner   error
+	FilePath string
+	FuncPath string
+	Message  error
+	Inner    error
 }
 
 // NewError creates a new Error instance with the given source location, message, and inner error.
 //
 // Parameters:
-//   - source: typically the file:line where the error occurred
+//   - filepath: typically the file:line where the error occurred
 //   - message: the error message to be displayed
 //   - inner: optional underlying error to be wrapped
-func NewError(source string, message, inner error) *Error {
+func NewError(filepath string, message, inner error) *Error {
+	var funcPath string
+	if GetErrorConfig().ShowFuncName {
+		if pc, _, _, ok := runtime.Caller(1); ok {
+			if fn := runtime.FuncForPC(pc); fn != nil {
+				if GetErrorConfig().ShowPackageName {
+					funcPath = fn.Name()
+				} else {
+					funcPath = stripPackageName(fn.Name())
+				}
+			}
+		}
+	}
+
 	return &Error{
-		Source:  source,
-		Message: message,
-		Inner:   inner,
+		FilePath: filepath,
+		FuncPath: funcPath,
+		Message:  message,
+		Inner:    inner,
 	}
 }
 
@@ -103,17 +120,17 @@ func (e *Error) ErrorMessage() (msg string) {
 
 // JSON returns a JSON formatted representation of the error
 func (e *Error) JSON() string {
-	return JSONFormatter(DefaultJSONConfig()).FormatError(e.Source, e.Message, e.Inner)
+	return JSONFormatter(DefaultJSONConfig()).FormatError(e.FilePath, e.Message, e.Inner)
 }
 
 // YAML returns a YAML formatted representation of the error
 func (e *Error) YAML() string {
-	return YAMLFormatter(DefaultYAMLConfig()).FormatError(e.Source, e.Message, e.Inner)
+	return YAMLFormatter(DefaultYAMLConfig()).FormatError(e.FilePath, e.Message, e.Inner)
 }
 
 // Colored returns a colored representation of the error for terminal output
 func (e *Error) Colored() string {
-	return ColoredFormatter(DefaultColorConfig()).FormatError(e.Source, e.Message, e.Inner)
+	return ColoredFormatter(DefaultColorConfig()).FormatError(e.FilePath, e.Message, e.Inner)
 }
 
 // Error implements the error interface and returns the complete
@@ -127,9 +144,17 @@ func (e *Error) Error() string {
 		var e *Error
 		if As(current, &e) {
 			if e.Message != nil {
-				stack = append([]string{fmt.Sprintf("%s: %s", e.Source, e.Message.Error())}, stack...)
+				if e.FuncPath != "" {
+					stack = append([]string{fmt.Sprintf("at %s %s: %s", e.FuncPath, e.FilePath, e.Message.Error())}, stack...)
+				} else {
+					stack = append([]string{fmt.Sprintf("at %s: %s", e.FilePath, e.Message.Error())}, stack...)
+				}
 			} else {
-				stack = append([]string{e.Source}, stack...)
+				if e.FuncPath != "" {
+					stack = append([]string{fmt.Sprintf("at %s %s", e.FuncPath, e.FilePath)}, stack...)
+				} else {
+					stack = append([]string{fmt.Sprintf("at %s", e.FilePath)}, stack...)
+				}
 			}
 			current = e.Inner
 		} else {

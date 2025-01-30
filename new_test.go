@@ -27,13 +27,13 @@ func TestNew(t *testing.T) {
 		t.Errorf("New() inner = %v, want nil", e.Inner)
 	}
 
-	if e.Source == "" {
-		t.Error("New() source is empty")
+	if e.FilePath == "" {
+		t.Error("New() filepath is empty")
 	}
 
-	// Source should contain this file name
-	if !strings.Contains(e.Source, "new_test.go") {
-		t.Errorf("New() source = %v, want to contain 'new_test.go'", e.Source)
+	// FilePath should contain this file name
+	if !strings.Contains(e.FilePath, "new_test.go") {
+		t.Errorf("New() filepath = %v, want to contain 'new_test.go'", e.FilePath)
 	}
 }
 
@@ -62,8 +62,8 @@ func TestNewf(t *testing.T) {
 		t.Errorf("Newf() inner = %v, want nil", e.Inner)
 	}
 
-	if !strings.Contains(e.Source, "new_test.go") {
-		t.Errorf("Newf() source = %v, want to contain 'new_test.go'", e.Source)
+	if !strings.Contains(e.FilePath, "new_test.go") {
+		t.Errorf("Newf() filepath = %v, want to contain 'new_test.go'", e.FilePath)
 	}
 }
 
@@ -109,8 +109,8 @@ func TestNewSkip(t *testing.T) {
 				t.Errorf("NewSkip() inner = %v, want nil", e.Inner)
 			}
 
-			if tt.skip == 0 && !strings.Contains(e.Source, tt.wantFile) {
-				t.Errorf("NewSkip() source = %v, want to contain %v", e.Source, tt.wantFile)
+			if tt.skip == 0 && !strings.Contains(e.FilePath, tt.wantFile) {
+				t.Errorf("NewSkip() filepath = %v, want to contain %v", e.FilePath, tt.wantFile)
 			}
 		})
 	}
@@ -164,8 +164,8 @@ func TestNewSkipf(t *testing.T) {
 				t.Errorf("NewSkipf() inner = %v, want nil", e.Inner)
 			}
 
-			if tt.skip == 0 && !strings.Contains(e.Source, tt.wantFile) {
-				t.Errorf("NewSkipf() source = %v, want to contain %v", e.Source, tt.wantFile)
+			if tt.skip == 0 && !strings.Contains(e.FilePath, tt.wantFile) {
+				t.Errorf("NewSkipf() filepath = %v, want to contain %v", e.FilePath, tt.wantFile)
 			}
 		})
 	}
@@ -218,9 +218,9 @@ func TestErrorStackFrames(t *testing.T) {
 				t.Fatalf("createErrorThroughFrames() returned %T, want *Error", err)
 			}
 
-			// Verify source contains correct file
-			if !strings.Contains(e.Source, "new_test.go") {
-				t.Errorf("source = %v, want to contain 'new_test.go'", e.Source)
+			// Verify filepath contains correct file
+			if !strings.Contains(e.FilePath, "new_test.go") {
+				t.Errorf("filepath = %v, want to contain 'new_test.go'", e.FilePath)
 			}
 
 			// Verify message format

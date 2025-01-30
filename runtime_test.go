@@ -18,9 +18,9 @@ func TestSetShowFuncName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			SetShowFuncName(tt.state)
-			if showFuncName.Load() != tt.expected {
-				t.Errorf("SetShowFuncName(%v) = %v, want %v", tt.state, showFuncName.Load(), tt.expected)
+			SetErrorConfig(WithShowFuncName(tt.state))
+			if GetErrorConfig().ShowFuncName != tt.expected {
+				t.Errorf("SetErrorConfig(WithShowFuncName(%v)) = %v, want %v", tt.state, GetErrorConfig().ShowFuncName, tt.expected)
 			}
 		})
 	}
@@ -38,9 +38,9 @@ func TestSetShowPackageName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			SetShowPackageName(tt.state)
-			if showPackageName.Load() != tt.expected {
-				t.Errorf("SetShowPackageName(%v) = %v, want %v", tt.state, showPackageName.Load(), tt.expected)
+			SetErrorConfig(WithShowPackageName(tt.state))
+			if GetErrorConfig().ShowPackageName != tt.expected {
+				t.Errorf("SetErrorConfig(WithShowPackageName(%v)) = %v, want %v", tt.state, GetErrorConfig().ShowPackageName, tt.expected)
 			}
 		})
 	}
@@ -86,8 +86,7 @@ func TestGetCallerPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			SetShowFuncName(tt.showFunc)
-			SetShowPackageName(tt.showPackage)
+			SetErrorConfig(WithShowFuncName(tt.showFunc), WithShowPackageName(tt.showPackage))
 
 			result := getCallerPath(tt.skipFrames)
 
@@ -146,30 +145,35 @@ func TestRuntimeIntegration(t *testing.T) {
 		name        string
 		showFunc    bool
 		showPackage bool
+		showPath    bool
 		validate    func(string) bool
 	}{
 		{
-			name:        "Both disabled",
+			name:        "All disabled",
 			showFunc:    false,
 			showPackage: false,
+			showPath:    false,
 			validate: func(s string) bool {
-				return !strings.Contains(s, "at ") && strings.Contains(s, ".go:")
+				return s == ""
 			},
 		},
 		{
 			name:        "Only function enabled",
 			showFunc:    true,
 			showPackage: false,
+			showPath:    false,
 			validate: func(s string) bool {
 				return strings.Contains(s, "at ") &&
-					strings.Contains(s, ".go:") &&
-					!strings.Contains(s, "github.com")
+					strings.Contains(s, "tRunner") &&
+					!strings.Contains(s, "github.com") &&
+					!strings.Contains(s, ".go:")
 			},
 		},
 		{
-			name:        "Both enabled",
+			name:        "All enabled",
 			showFunc:    true,
 			showPackage: true,
+			showPath:    true,
 			validate: func(s string) bool {
 				return strings.Contains(s, "at ") &&
 					strings.Contains(s, ".go:") &&
@@ -180,8 +184,7 @@ func TestRuntimeIntegration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			SetShowFuncName(tt.showFunc)
-			SetShowPackageName(tt.showPackage)
+			SetErrorConfig(WithShowFuncName(tt.showFunc), WithShowPackageName(tt.showPackage), WithShowFilePath(tt.showPath))
 
 			result := getCallerPath(0)
 			if !tt.validate(result) {

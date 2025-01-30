@@ -79,21 +79,6 @@ func (e *Error) Each(it func(err error) bool) {
 	}
 }
 
-// JSON returns a JSON formatted representation of the error
-func (e *Error) JSON() string {
-	return JSONFormatter(DefaultJSONConfig()).FormatError(e.Source, e.Message, e.Inner)
-}
-
-// YAML returns a YAML formatted representation of the error
-func (e *Error) YAML() string {
-	return YAMLFormatter(DefaultYAMLConfig()).FormatError(e.Source, e.Message, e.Inner)
-}
-
-// Colored returns a colored representation of the error for terminal output
-func (e *Error) Colored() string {
-	return ColoredFormatter(DefaultColorConfig()).FormatError(e.Source, e.Message, e.Inner)
-}
-
 // ErrorMessage returns the innermost error message without source location
 // or stack trace information. This is useful when you only need the core
 // error message without the additional context.
@@ -114,6 +99,21 @@ func (e *Error) ErrorMessage() (msg string) {
 	})
 
 	return
+}
+
+// JSON returns a JSON formatted representation of the error
+func (e *Error) JSON() string {
+	return JSONFormatter(DefaultJSONConfig()).FormatError(e.Source, e.Message, e.Inner)
+}
+
+// YAML returns a YAML formatted representation of the error
+func (e *Error) YAML() string {
+	return YAMLFormatter(DefaultYAMLConfig()).FormatError(e.Source, e.Message, e.Inner)
+}
+
+// Colored returns a colored representation of the error for terminal output
+func (e *Error) Colored() string {
+	return ColoredFormatter(DefaultColorConfig()).FormatError(e.Source, e.Message, e.Inner)
 }
 
 // Error implements the error interface and returns the complete

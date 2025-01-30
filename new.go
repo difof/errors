@@ -12,7 +12,7 @@ import (
 //
 //	return errors.New("connection failed")
 func New(msg string) error {
-	return NewError(getCallerPath(0), errors.New(msg), nil)
+	return NewSkip(2, msg)
 }
 
 // Newf creates a new formatted error with stack trace information.
@@ -22,7 +22,7 @@ func New(msg string) error {
 //
 //	return errors.Newf("failed to connect to %s: %v", host, err)
 func Newf(format string, params ...any) error {
-	return NewError(getCallerPath(0), errors.New(fmt.Sprintf(format, params...)), nil)
+	return NewSkipf(2, format, params...)
 }
 
 // NewSkip creates a new error, skipping the specified number of stack frames
@@ -32,7 +32,8 @@ func Newf(format string, params ...any) error {
 //   - skip: number of stack frames to skip
 //   - msg: error message
 func NewSkip(skip int, msg string) error {
-	return NewError(getCallerPath(skip), errors.New(msg), nil)
+	funcpath, filepath, line := getCallerPath(skip)
+	return NewError(funcpath, filepath, line, errors.New(msg), nil)
 }
 
 // NewSkipf creates a new formatted error, skipping the specified number
@@ -43,5 +44,6 @@ func NewSkip(skip int, msg string) error {
 //   - format: format string for the error message
 //   - params: arguments for the format string
 func NewSkipf(skip int, format string, params ...any) error {
-	return NewError(getCallerPath(skip), errors.New(fmt.Sprintf(format, params...)), nil)
+	funcpath, filepath, line := getCallerPath(skip)
+	return NewError(funcpath, filepath, line, errors.New(fmt.Sprintf(format, params...)), nil)
 }

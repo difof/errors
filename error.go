@@ -9,30 +9,31 @@ import (
 // It provides enhanced error handling capabilities by maintaining:
 //   - FilePath: The file path where the error occurred (file:line)
 //   - FuncPath: The function path where the error occurred (package.function)
+//   - Line: The line number where the error occurred
 //   - Message: The actual error message
 //   - Inner: The wrapped/underlying error for error chaining
 type Error struct {
-	FilePath string
-	FuncPath string
-	Message  error
-	Inner    error
+	FilePath      string `json:"filepath,omitempty" yaml:"filepath,omitempty"`
+	FuncPath      string `json:"funcpath,omitempty" yaml:"funcpath,omitempty"`
+	Line          int    `json:"line,omitempty" yaml:"line,omitempty"`
+	MessageString string `json:"message,omitempty" yaml:"message,omitempty"`
+	Message       error  `json:"-" yaml:"-"`
+	Inner         error  `json:"-" yaml:"-"`
 }
 
 // NewError creates a new Error instance with the given source location, message, and inner error.
 //
 // Parameters:
+//   - funcpath: typically the package.function where the error occurred
 //   - filepath: typically the file:line where the error occurred
+//   - line: the line number where the error occurred
 //   - message: the error message to be displayed
 //   - inner: optional underlying error to be wrapped
-func NewError(filepath string, message, inner error) *Error {
-	var funcPath string
-	if GetErrorConfig().ShowFuncName {
-		funcPath = getCallerPath(1)
-	}
-
+func NewError(funcpath string, filepath string, line int, message, inner error) *Error {
 	return &Error{
 		FilePath: filepath,
-		FuncPath: funcPath,
+		FuncPath: funcpath,
+		Line:     line,
 		Message:  message,
 		Inner:    inner,
 	}
@@ -53,6 +54,25 @@ func ErrorMessageOf(err error) string {
 	}
 
 	return err.Error()
+}
+
+func (e *Error) ExtractEntries() []Error {
+	var entries []Error
+
+	e.Each(func(err error) bool {
+		var e *Error
+		if As(err, &e) {
+			entries = append(entries, *e)
+
+			if e.Message != nil {
+				// TODO: what if the message itself is an Error?!
+				e.MessageString = e.Message.Error()
+			}
+		}
+		return true
+	})
+
+	return entries
 }
 
 // Each iterates over all inner errors of Error chain.
@@ -109,23 +129,23 @@ func (e *Error) ErrorMessage() (msg string) {
 
 // JSON returns a JSON formatted representation of the error
 func (e *Error) JSON() string {
-	return JSONFormatter(DefaultJSONConfig()).FormatError(e.FilePath, e.Message, e.Inner)
+	return JSONFormatter(DefaultJSONConfig()).FormatError(e)
 }
 
 // YAML returns a YAML formatted representation of the error
 func (e *Error) YAML() string {
-	return YAMLFormatter(DefaultYAMLConfig()).FormatError(e.FilePath, e.Message, e.Inner)
+	return YAMLFormatter(DefaultYAMLConfig()).FormatError(e)
 }
 
 // Colored returns a colored representation of the error for terminal output
 func (e *Error) Colored() string {
-	return ColoredFormatter(DefaultColorConfig()).FormatError(e.FilePath, e.Message, e.Inner)
+	return ColoredFormatter(DefaultColorConfig()).FormatError(e)
 }
 
 // Error implements the error interface and returns the complete
 // stack trace of this error as a newline-separated string.
 func (e *Error) Error() string {
-	return TextFormatter(DefaultTextConfig()).FormatError(e.FilePath, e.Message, e.Inner)
+	return TextFormatter(DefaultTextConfig()).FormatError(e)
 }
 
 // Unwrap returns the inner error, implementing the interface

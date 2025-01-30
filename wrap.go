@@ -14,10 +14,7 @@ import (
 //	    return errors.Wrap(err)
 //	}
 func Wrap(inner error) error {
-	if inner == nil {
-		return nil
-	}
-	return NewError(getCallerPath(0), nil, inner)
+	return WrapSkip(2, inner)
 }
 
 // WrapResult wraps an existing error and returns both the result and the error.
@@ -31,7 +28,7 @@ func WrapResult[T any](r T, err error) (T, error) {
 		return r, nil
 	}
 
-	return r, NewError(getCallerPath(0), nil, err)
+	return r, WrapSkip(2, err)
 }
 
 // WrapResultf returns a formatter function that wraps an existing error and returns both the result and the error.
@@ -47,7 +44,7 @@ func WrapResultf[T any](r T, err error) func(format string, params ...any) (T, e
 			return r, nil
 		}
 
-		return r, NewError(getCallerPath(0), nil, err)
+		return r, WrapSkipf(3, err, format, params...)
 	}
 }
 
@@ -65,7 +62,9 @@ func Wrape(err error, inner error) error {
 	if err == nil && inner == nil {
 		return nil
 	}
-	return NewError(getCallerPath(0), err, inner)
+
+	funcpath, filepath, line := getCallerPath(1)
+	return NewError(funcpath, filepath, line, err, inner)
 }
 
 // Wrapf creates a new formatted error that wraps an existing error.
@@ -80,10 +79,7 @@ func Wrape(err error, inner error) error {
 //
 //	return errors.Wrapf(err, "failed to process user %s", username)
 func Wrapf(inner error, format string, params ...any) error {
-	if inner == nil && format == "" {
-		return nil
-	}
-	return NewError(getCallerPath(0), errors.New(fmt.Sprintf(format, params...)), inner)
+	return WrapSkipf(2, inner, format, params...)
 }
 
 // WrapSkip wraps an existing error, skipping the specified number
@@ -96,7 +92,9 @@ func WrapSkip(skip int, inner error) error {
 	if inner == nil {
 		return nil
 	}
-	return NewError(getCallerPath(skip), nil, inner)
+
+	funcpath, filepath, line := getCallerPath(skip)
+	return NewError(funcpath, filepath, line, nil, inner)
 }
 
 // WrapSkipf creates a new formatted error wrapping an existing error,
@@ -111,5 +109,7 @@ func WrapSkipf(skip int, inner error, format string, params ...any) error {
 	if inner == nil && format == "" {
 		return nil
 	}
-	return NewError(getCallerPath(skip), errors.New(fmt.Sprintf(format, params...)), inner)
+
+	funcpath, filepath, line := getCallerPath(skip)
+	return NewError(funcpath, filepath, line, errors.New(fmt.Sprintf(format, params...)), inner)
 }

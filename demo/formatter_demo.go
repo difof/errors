@@ -3,32 +3,50 @@ package main
 import (
 	"fmt"
 	"os"
-	"runtime"
 
 	"github.com/difof/errors"
+	"github.com/difof/errors/demo/nested_package"
 )
 
-// createDeepError creates a deeply nested error chain to demonstrate stack traces
-func createDeepError(depth int) error {
-	_, file, line, _ := runtime.Caller(0)
-	if depth == 0 {
-		return errors.NewError(fmt.Sprintf("%s:%d", file, line), fmt.Errorf("root cause error"), nil)
+// createErrorChain creates a deeply nested error chain to demonstrate stack traces
+func createErrorChain(depth int) error {
+	var err error = errors.New("root cause error")
+
+	for i := 1; i < depth; i++ {
+		if i == 3 {
+			err = errors.Wrapf(
+				nested_package.CreateNestedError(err, i),
+				"error at depth %d", i,
+			)
+		} else {
+			err = errors.Wrapf(
+				err,
+				"error at depth %d", i,
+			)
+		}
 	}
 
-	innerErr := createDeepError(depth - 1)
-	return errors.NewError(
-		fmt.Sprintf("%s:%d", file, line),
-		fmt.Errorf("error at depth %d", depth),
-		innerErr,
-	)
+	return err
 }
 
 func main() {
 	// Create a deep error chain
-	err := createDeepError(5)
+	err := createErrorChain(5)
 	if err == nil {
 		fmt.Println("No error occurred!")
 		os.Exit(0)
+	}
+
+	// config
+	showColor := os.Getenv("SHOW_COLOR") == "true"
+	showJSON := os.Getenv("SHOW_JSON") == "true"
+	showYAML := os.Getenv("SHOW_YAML") == "true"
+	showAll := os.Getenv("SHOW_ALL") == "true"
+
+	if showAll {
+		showColor = true
+		showJSON = true
+		showYAML = true
 	}
 
 	// Cast to our Error type
@@ -39,17 +57,23 @@ func main() {
 	fmt.Println(e.Error())
 	fmt.Println()
 
-	fmt.Println("=== Colored Format (for terminals) ===")
-	fmt.Println(e.Colored())
-	fmt.Println()
+	if showColor {
+		fmt.Println("=== Colored Format (for terminals) ===")
+		fmt.Println(e.Colored())
+		fmt.Println()
+	}
 
-	fmt.Println("=== JSON Format ===")
-	fmt.Println(e.JSON())
-	fmt.Println()
+	if showJSON {
+		fmt.Println("=== JSON Format ===")
+		fmt.Println(e.JSON())
+		fmt.Println()
+	}
 
-	fmt.Println("=== YAML Format ===")
-	fmt.Println(e.YAML())
-	fmt.Println()
+	if showYAML {
+		fmt.Println("=== YAML Format ===")
+		fmt.Println(e.YAML())
+		fmt.Println()
+	}
 
 	// Print just the error message without the stack trace
 	fmt.Println("=== Error Message Only ===")

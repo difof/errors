@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+
+	"github.com/fatih/color"
 )
 
 // Formatter interface for custom formatting
@@ -231,25 +233,17 @@ func (f *yamlFormatter) FormatStack(source string, message error) string {
 	return b.String()
 }
 
-// ANSI color codes
-const (
-	colorRed    = "\033[31m"
-	colorYellow = "\033[33m"
-	colorBlue   = "\033[34m"
-	colorReset  = "\033[0m"
-)
-
 // ColorConfig configures the colored formatter
 type ColorConfig struct {
-	// SourceColor is the ANSI color code for source locations
-	SourceColor string
-	// MessageColor is the ANSI color code for error messages
-	MessageColor string
-	// InnerColor is the ANSI color code for inner errors
-	InnerColor string
+	// SourceColor is the color for source locations
+	SourceColor *color.Color
+	// MessageColor is the color for error messages
+	MessageColor *color.Color
+	// InnerColor is the color for inner errors
+	InnerColor *color.Color
 }
 
-// coloredFormatter formats errors with ANSI colors for terminal output
+// coloredFormatter formats errors with colors for terminal output
 type coloredFormatter struct {
 	config ColorConfig
 }
@@ -306,17 +300,17 @@ func (f *coloredFormatter) FormatError(source string, message error, inner error
 			b.WriteString("\n  ")
 		}
 		if err.Source != "" {
-			b.WriteString(f.config.SourceColor)
-			b.WriteString(err.Source)
-			b.WriteString(colorReset)
+			b.WriteString(f.config.SourceColor.Sprint(err.Source))
 			if err.Message != "" {
 				b.WriteString(": ")
 			}
 		}
 		if err.Message != "" {
-			b.WriteString(f.config.MessageColor)
-			b.WriteString(err.Message)
-			b.WriteString(colorReset)
+			if err.Source == "" {
+				b.WriteString(f.config.MessageColor.Sprint(err.Message))
+			} else {
+				b.WriteString(f.config.MessageColor.Sprint(err.Message))
+			}
 		}
 	}
 
@@ -325,15 +319,11 @@ func (f *coloredFormatter) FormatError(source string, message error, inner error
 
 func (f *coloredFormatter) FormatStack(source string, message error) string {
 	var b strings.Builder
-	b.WriteString(f.config.SourceColor)
-	b.WriteString(source)
-	b.WriteString(colorReset)
+	b.WriteString(f.config.SourceColor.Sprint(source))
 
 	if message != nil {
 		b.WriteString(": ")
-		b.WriteString(f.config.MessageColor)
-		b.WriteString(message.Error())
-		b.WriteString(colorReset)
+		b.WriteString(f.config.MessageColor.Sprint(message.Error()))
 	}
 	return b.String()
 }
@@ -393,9 +383,9 @@ func DefaultYAMLConfig() YAMLConfig {
 // DefaultColorConfig returns the default configuration for colored formatter
 func DefaultColorConfig() ColorConfig {
 	return ColorConfig{
-		SourceColor:  colorBlue,
-		MessageColor: colorRed,
-		InnerColor:   colorYellow,
+		SourceColor:  color.New(color.FgBlue),
+		MessageColor: color.New(color.FgRed),
+		InnerColor:   color.New(color.FgYellow),
 	}
 }
 

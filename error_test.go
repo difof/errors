@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/fatih/color"
 )
 
 func createNestedServiceError() error {
@@ -450,24 +452,29 @@ func TestError_YAML(t *testing.T) {
 }
 
 func TestError_Colored(t *testing.T) {
-	source := "test.go:42"
-	message := fmt.Errorf("test error")
+	// Save color state and restore after test
+	oldNoColor := color.NoColor
+	defer func() { color.NoColor = oldNoColor }()
+	color.NoColor = false
+
 	inner := fmt.Errorf("inner error")
-	err := NewError(source, message, inner)
+	e := NewError("test.go:42", fmt.Errorf("test error"), inner)
 
-	SetFormatter(ColoredFormatter(DefaultColorConfig()))
-	defer SetFormatter(defaultFormatter)
+	got := e.Colored()
+	stripped := stripColors(got)
 
-	got := err.Error()
+	// Verify the format matches the standard text format
+	want := "inner error\n  test.go:42: test error"
+	if stripped != want {
+		t.Errorf("Colored output after stripping colors = %q, want %q", stripped, want)
+	}
 
-	// Root cause should be first
+	// Verify colored content is present
 	if !strings.Contains(got, "inner error") {
 		t.Error("Colored output missing \"inner error\"")
 	}
-
-	// Outer error should be second
-	if !strings.Contains(got, "\n  test.go:42: test error") {
-		t.Error("Colored output missing \"test.go:42: test error\"")
+	if !strings.Contains(got, "test.go:42") {
+		t.Error("Colored output missing \"test.go:42\"")
 	}
 }
 

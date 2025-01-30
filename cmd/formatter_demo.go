@@ -16,10 +16,11 @@ func createDeepError(depth int) error {
 	}
 
 	_, file, line, _ := runtime.Caller(1)
+	innerErr := createDeepError(depth - 1)
 	return errors.NewError(
 		fmt.Sprintf("%s:%d", file, line),
 		fmt.Errorf("error at depth %d", depth),
-		createDeepError(depth-1),
+		innerErr,
 	)
 }
 

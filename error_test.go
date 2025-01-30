@@ -471,20 +471,24 @@ func TestError_JSON(t *testing.T) {
 	t.Logf("JSON output: %q", got)
 
 	// Verify it's valid JSON
-	var data map[string]interface{}
-	if err := json.Unmarshal([]byte(got), &data); err != nil {
+	var stack []jsonError
+	if err := json.Unmarshal([]byte(got), &stack); err != nil {
 		t.Fatalf("Failed to parse JSON: %v", err)
 	}
 
 	// Verify expected fields
-	if source, ok := data["source"].(string); !ok || source != "test.go:42" {
-		t.Errorf("Expected source test.go:42, got %v", data["source"])
+	if len(stack) != 2 {
+		t.Fatalf("Expected 2 errors in stack, got %d", len(stack))
 	}
-	if msg, ok := data["message"].(string); !ok || msg != "test error" {
-		t.Errorf("Expected message 'test error', got %v", data["message"])
+
+	if stack[0].Source != "test.go:42" {
+		t.Errorf("Expected source test.go:42, got %v", stack[0].Source)
 	}
-	if inner, ok := data["inner"].(string); !ok || inner != "inner error" {
-		t.Errorf("Expected inner 'inner error', got %v", data["inner"])
+	if stack[0].Message != "test error" {
+		t.Errorf("Expected message 'test error', got %v", stack[0].Message)
+	}
+	if stack[1].Message != "inner error" {
+		t.Errorf("Expected inner 'inner error', got %v", stack[1].Message)
 	}
 }
 
@@ -511,24 +515,18 @@ func TestError_Colored(t *testing.T) {
 	got := err.Colored()
 
 	// Verify color codes are present
-	if !strings.Contains(got, colorBlue) {
-		t.Error("Source color not found in output")
+	if !strings.Contains(got, colorBlue+"test.go:42"+colorReset) {
+		t.Error("Source not properly colored")
 	}
-	if !strings.Contains(got, colorRed) {
-		t.Error("Message color not found in output")
-	}
-	if !strings.Contains(got, colorYellow) {
-		t.Error("Inner error color not found in output")
-	}
-	if !strings.Contains(got, colorReset) {
-		t.Error("Color reset code not found in output")
+	if !strings.Contains(got, colorRed+"test error"+colorReset) {
+		t.Error("Message not properly colored")
 	}
 
-	// Verify error content
+	// Verify error content and indentation
 	uncolored := stripColors(got)
 	expected := []string{
 		"test.go:42: test error",
-		"inner error",
+		"  inner error",
 	}
 
 	for _, want := range expected {

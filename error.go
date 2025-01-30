@@ -2,7 +2,6 @@ package errors
 
 import (
 	goerrors "errors"
-	"strings"
 )
 
 // Error is a lightweight drop-in replacement for standard errors package with stacktrace.
@@ -154,7 +153,7 @@ func (e *Error) ErrorMessage() (msg string) {
 // Error implements the error interface and returns the complete
 // stack trace of this error as a newline-separated string.
 func (e *Error) Error() string {
-	return strings.Join(e.StackTrace(), "\n")
+	return GetFormatter().FormatError(e.Source, e.Message, e.Inner)
 }
 
 // Unwrap returns the inner error, implementing the interface

@@ -29,13 +29,13 @@ func TestFormatters(t *testing.T) {
 	// Test data
 	source := "test.go:42"
 	message := fmt.Errorf("test error")
-	inner := fmt.Errorf("inner error")
+	inner := NewError("inner.go:24", fmt.Errorf("inner error"), nil)
 
 	t.Run("TextFormatter", func(t *testing.T) {
 		// Default config
 		formatter := TextFormatter(DefaultTextConfig())
 		got := formatter.FormatError(source, message, inner)
-		want := "test.go:42: test error"
+		want := "test.go:42: test error\n  inner.go:24: inner error"
 		if got != want {
 			t.Errorf("TextFormatter.FormatError() = %q, want %q", got, want)
 		}
@@ -44,7 +44,7 @@ func TestFormatters(t *testing.T) {
 		customConfig := TextConfig{Indent: "    "}
 		formatter = TextFormatter(customConfig)
 		got = formatter.FormatError(source, message, inner)
-		want = "test.go:42: test error"
+		want = "test.go:42: test error\n    inner.go:24: inner error"
 		if got != want {
 			t.Errorf("TextFormatter.FormatError() with custom config = %q, want %q", got, want)
 		}
@@ -56,19 +56,26 @@ func TestFormatters(t *testing.T) {
 		got := formatter.FormatError(source, message, inner)
 
 		// Verify JSON structure
-		var data map[string]interface{}
-		if err := json.Unmarshal([]byte(got), &data); err != nil {
+		var stack []jsonError
+		if err := json.Unmarshal([]byte(got), &stack); err != nil {
 			t.Fatalf("Failed to parse JSON: %v", err)
 		}
 
-		if data["source"] != source {
-			t.Errorf("JSON source = %v, want %v", data["source"], source)
+		if len(stack) != 2 {
+			t.Fatalf("Expected 2 errors in stack, got %d", len(stack))
 		}
-		if data["message"] != message.Error() {
-			t.Errorf("JSON message = %v, want %v", data["message"], message.Error())
+
+		if stack[0].Source != source {
+			t.Errorf("JSON source = %v, want %v", stack[0].Source, source)
 		}
-		if data["inner"] != inner.Error() {
-			t.Errorf("JSON inner = %v, want %v", data["inner"], inner.Error())
+		if stack[0].Message != message.Error() {
+			t.Errorf("JSON message = %v, want %v", stack[0].Message, message.Error())
+		}
+		if stack[1].Source != "inner.go:24" {
+			t.Errorf("JSON inner source = %v, want inner.go:24", stack[1].Source)
+		}
+		if stack[1].Message != "inner error" {
+			t.Errorf("JSON inner message = %v, want inner error", stack[1].Message)
 		}
 
 		// Custom config
@@ -88,9 +95,11 @@ func TestFormatters(t *testing.T) {
 		formatter := YAMLFormatter(DefaultYAMLConfig())
 		got := formatter.FormatError(source, message, inner)
 		want := []string{
-			"source: test.go:42",
-			"  message: test error",
-			"  inner: inner error",
+			"errors:",
+			"  - source: test.go:42",
+			"    message: test error",
+			"  - source: inner.go:24",
+			"    message: inner error",
 		}
 		for _, line := range want {
 			if !strings.Contains(got, line) {
@@ -102,7 +111,7 @@ func TestFormatters(t *testing.T) {
 		customConfig := YAMLConfig{Indent: "    "}
 		formatter = YAMLFormatter(customConfig)
 		got = formatter.FormatError(source, message, inner)
-		if !strings.Contains(got, "    message:") {
+		if !strings.Contains(got, "    - source:") {
 			t.Error("Custom YAML indent not applied")
 		}
 	})
@@ -111,8 +120,19 @@ func TestFormatters(t *testing.T) {
 		// Default config
 		formatter := ColoredFormatter(DefaultColorConfig())
 		got := formatter.FormatError(source, message, inner)
-		if !strings.Contains(got, colorBlue) || !strings.Contains(got, colorRed) || !strings.Contains(got, colorYellow) {
-			t.Error("Default colors not applied")
+
+		// Verify color codes and structure
+		if !strings.Contains(got, colorBlue+source+colorReset) {
+			t.Error("Source not properly colored")
+		}
+		if !strings.Contains(got, colorRed+message.Error()+colorReset) {
+			t.Error("Message not properly colored")
+		}
+		if !strings.Contains(got, "  "+colorBlue+"inner.go:24"+colorReset) {
+			t.Error("Inner source not properly colored and indented")
+		}
+		if !strings.Contains(got, colorRed+"inner error"+colorReset) {
+			t.Error("Inner message not properly colored")
 		}
 
 		// Custom config
@@ -123,10 +143,11 @@ func TestFormatters(t *testing.T) {
 		}
 		formatter = ColoredFormatter(customConfig)
 		got = formatter.FormatError(source, message, inner)
-		if !strings.Contains(got, customConfig.SourceColor) ||
-			!strings.Contains(got, customConfig.MessageColor) ||
-			!strings.Contains(got, customConfig.InnerColor) {
-			t.Error("Custom colors not applied")
+		if !strings.Contains(got, customConfig.SourceColor+source+colorReset) {
+			t.Error("Custom source color not applied")
+		}
+		if !strings.Contains(got, customConfig.MessageColor+message.Error()+colorReset) {
+			t.Error("Custom message color not applied")
 		}
 	})
 

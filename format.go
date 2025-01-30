@@ -29,21 +29,35 @@ type textFormatter struct {
 func (f *textFormatter) FormatError(source string, message error, inner error) string {
 	var stack []string
 
-	// Build the stack in reverse order (innermost first)
+	// Add current error first
+	if message != nil {
+		stack = append(stack, fmt.Sprintf("%s: %s", source, message.Error()))
+	} else {
+		stack = append(stack, source)
+	}
+
+	// Add inner errors recursively
 	var current error = inner
 	var e *Error
 	for current != nil {
 		if As(current, &e) {
-			stack = append([]string{fmt.Sprintf("%s: %s", e.Source, e.Message.Error())}, stack...)
+			if e.Message != nil {
+				stack = append(stack, fmt.Sprintf("%s: %s", e.Source, e.Message.Error()))
+			} else {
+				stack = append(stack, e.Source)
+			}
 			current = e.Inner
 		} else {
-			stack = append([]string{current.Error()}, stack...)
+			stack = append(stack, current.Error())
 			break
 		}
 	}
 
-	// Add the current error last
-	stack = append(stack, fmt.Sprintf("%s: %s", source, message.Error()))
+	// Reverse the stack to show root cause first
+	for i := 0; i < len(stack)/2; i++ {
+		j := len(stack) - 1 - i
+		stack[i], stack[j] = stack[j], stack[i]
+	}
 
 	// Build the output with proper indentation
 	var b strings.Builder
@@ -86,29 +100,35 @@ type jsonFormatter struct {
 func (f *jsonFormatter) FormatError(source string, message error, inner error) string {
 	var stack []jsonError
 
-	// Build the stack in reverse order (innermost first)
+	// Add current error first
+	entry := jsonError{Source: source}
+	if message != nil {
+		entry.Message = message.Error()
+	}
+	stack = append(stack, entry)
+
+	// Add inner errors recursively
 	var current error = inner
 	var e *Error
 	for current != nil {
 		if As(current, &e) {
-			stack = append([]jsonError{{
-				Source:  e.Source,
-				Message: e.Message.Error(),
-			}}, stack...)
+			entry := jsonError{Source: e.Source}
+			if e.Message != nil {
+				entry.Message = e.Message.Error()
+			}
+			stack = append(stack, entry)
 			current = e.Inner
 		} else {
-			stack = append([]jsonError{{
-				Message: current.Error(),
-			}}, stack...)
+			stack = append(stack, jsonError{Message: current.Error()})
 			break
 		}
 	}
 
-	// Add the current error last
-	stack = append(stack, jsonError{
-		Source:  source,
-		Message: message.Error(),
-	})
+	// Reverse the stack to show root cause first
+	for i := 0; i < len(stack)/2; i++ {
+		j := len(stack) - 1 - i
+		stack[i], stack[j] = stack[j], stack[i]
+	}
 
 	data, _ := json.MarshalIndent(stack, f.config.Prefix, f.config.Indent)
 	return string(data)
@@ -140,38 +160,44 @@ func (f *yamlFormatter) FormatError(source string, message error, inner error) s
 		Message string
 	}
 
-	// Build the stack in reverse order (innermost first)
+	// Add current error first
+	entry := struct {
+		Source  string
+		Message string
+	}{Source: source}
+	if message != nil {
+		entry.Message = message.Error()
+	}
+	stack = append(stack, entry)
+
+	// Add inner errors recursively
 	var current error = inner
 	var e *Error
 	for current != nil {
 		if As(current, &e) {
-			stack = append([]struct {
+			entry := struct {
 				Source  string
 				Message string
-			}{{
-				Source:  e.Source,
-				Message: e.Message.Error(),
-			}}, stack...)
+			}{Source: e.Source}
+			if e.Message != nil {
+				entry.Message = e.Message.Error()
+			}
+			stack = append(stack, entry)
 			current = e.Inner
 		} else {
-			stack = append([]struct {
+			stack = append(stack, struct {
 				Source  string
 				Message string
-			}{{
-				Message: current.Error(),
-			}}, stack...)
+			}{Message: current.Error()})
 			break
 		}
 	}
 
-	// Add the current error last
-	stack = append(stack, struct {
-		Source  string
-		Message string
-	}{
-		Source:  source,
-		Message: message.Error(),
-	})
+	// Reverse the stack to show root cause first
+	for i := 0; i < len(stack)/2; i++ {
+		j := len(stack) - 1 - i
+		stack[i], stack[j] = stack[j], stack[i]
+	}
 
 	// Build YAML output
 	var b strings.Builder
@@ -234,51 +260,60 @@ func (f *coloredFormatter) FormatError(source string, message error, inner error
 		Message string
 	}
 
-	// Build the stack in reverse order (innermost first)
+	// Add current error first
+	entry := struct {
+		Source  string
+		Message string
+	}{Source: source}
+	if message != nil {
+		entry.Message = message.Error()
+	}
+	stack = append(stack, entry)
+
+	// Add inner errors recursively
 	var current error = inner
-	var e *Error
 	for current != nil {
+		var e *Error
 		if As(current, &e) {
-			stack = append([]struct {
+			entry := struct {
 				Source  string
 				Message string
-			}{{
-				Source:  e.Source,
-				Message: e.Message.Error(),
-			}}, stack...)
+			}{Source: e.Source}
+			if e.Message != nil {
+				entry.Message = e.Message.Error()
+			}
+			stack = append(stack, entry)
 			current = e.Inner
 		} else {
-			stack = append([]struct {
+			stack = append(stack, struct {
 				Source  string
 				Message string
-			}{{
-				Message: current.Error(),
-			}}, stack...)
+			}{Message: current.Error()})
 			break
 		}
 	}
 
-	// Add the current error last
-	stack = append(stack, struct {
-		Source  string
-		Message string
-	}{
-		Source:  source,
-		Message: message.Error(),
-	})
+	// Reverse the stack to show root cause first
+	for i := 0; i < len(stack)/2; i++ {
+		j := len(stack) - 1 - i
+		stack[i], stack[j] = stack[j], stack[i]
+	}
 
 	// Build colored output
 	var b strings.Builder
 	for i, err := range stack {
 		if i > 0 {
-			b.WriteString("\n")
-			b.WriteString("  ")
+			b.WriteString("\n  ")
 		}
-		b.WriteString(f.config.SourceColor)
-		b.WriteString(err.Source)
-		b.WriteString(colorReset)
+		if err.Source != "" {
+			b.WriteString(f.config.SourceColor)
+			b.WriteString(err.Source)
+			b.WriteString(colorReset)
+			if err.Message != "" {
+				b.WriteString(": ")
+			}
+		}
 		if err.Message != "" {
-			b.WriteString(": ")
 			b.WriteString(f.config.MessageColor)
 			b.WriteString(err.Message)
 			b.WriteString(colorReset)

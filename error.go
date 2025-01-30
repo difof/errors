@@ -79,43 +79,6 @@ func (e *Error) Each(it func(err error) bool) {
 	}
 }
 
-// StackTrace builds a complete stack trace of all inner errors.
-//
-// Returns a slice of strings where each entry represents one level
-// in the error chain, starting from the innermost error.
-//
-// The returned stack trace is in reverse order (root cause first).
-func (e *Error) StackTrace() (list []string) {
-	list = make([]string, 0, 5)
-
-	// Build the stack in reverse order (innermost first)
-	var current error = e
-	for current != nil {
-		var e *Error
-		if As(current, &e) {
-			list = append(list, e.String())
-			current = e.Inner
-		} else {
-			list = append(list, current.Error())
-			break
-		}
-	}
-
-	// Reverse the stack so root cause is first
-	for i, j := 0, len(list)-1; i < j; i, j = i+1, j-1 {
-		list[i], list[j] = list[j], list[i]
-	}
-
-	return
-}
-
-// String returns a formatted string of the current error level,
-// combining the source location and error message if present.
-// If there's no message, only the source is returned.
-func (e *Error) String() string {
-	return GetFormatter().FormatError(e.Source, e.Message, e.Inner)
-}
-
 // JSON returns a JSON formatted representation of the error
 func (e *Error) JSON() string {
 	return JSONFormatter(DefaultJSONConfig()).FormatError(e.Source, e.Message, e.Inner)
@@ -163,7 +126,11 @@ func (e *Error) Error() string {
 	for current != nil {
 		var e *Error
 		if As(current, &e) {
-			stack = append([]string{fmt.Sprintf("%s: %s", e.Source, e.Message.Error())}, stack...)
+			if e.Message != nil {
+				stack = append([]string{fmt.Sprintf("%s: %s", e.Source, e.Message.Error())}, stack...)
+			} else {
+				stack = append([]string{e.Source}, stack...)
+			}
 			current = e.Inner
 		} else {
 			stack = append([]string{current.Error()}, stack...)

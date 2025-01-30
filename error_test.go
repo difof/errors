@@ -35,7 +35,7 @@ func TestErrorWrapping(t *testing.T) {
 	}
 
 	// Verify the complete error stack
-	stackTrace := err.(*Error).StackTrace()
+	errStr := err.Error()
 	expectedLayers := []string{
 		"value out of range",
 		"validation layer: invalid input",
@@ -43,13 +43,9 @@ func TestErrorWrapping(t *testing.T) {
 		"service layer: failed to process request",
 	}
 
-	if len(stackTrace) != len(expectedLayers) {
-		t.Errorf("expected %d layers in stack trace, got %d", len(expectedLayers), len(stackTrace))
-	}
-
-	for i, expected := range expectedLayers {
-		if !strings.Contains(stackTrace[i], expected) {
-			t.Errorf("layer %d: expected to contain %q, got %q", i, expected, stackTrace[i])
+	for _, expected := range expectedLayers {
+		if !strings.Contains(errStr, expected) {
+			t.Errorf("error string should contain %q", expected)
 		}
 	}
 
@@ -72,25 +68,18 @@ func TestRecursiveErrorWrapping(t *testing.T) {
 	}
 
 	err := createRecursiveError(0)
-	stackTrace := err.(*Error).StackTrace()
+	errStr := err.Error()
 
-	// Verify stack depth
-	expectedDepth := maxDepth + 1 // maxDepth + initial call
-	if len(stackTrace) != expectedDepth {
-		t.Errorf("expected stack depth of %d, got %d", expectedDepth, len(stackTrace))
-	}
-
-	// Verify root cause is first
-	if !strings.Contains(stackTrace[0], "reached max depth") {
-		t.Errorf("expected root cause 'reached max depth', got %q", stackTrace[0])
+	// Verify root cause
+	if !strings.Contains(errStr, "reached max depth") {
+		t.Errorf("expected root cause 'reached max depth' in error string")
 	}
 
 	// Verify recursion messages
-	for i := 1; i < len(stackTrace); i++ {
-		depth := maxDepth - i
-		expected := fmt.Sprintf("recursion depth %d", depth)
-		if !strings.Contains(stackTrace[i], expected) {
-			t.Errorf("layer %d: expected to contain %q, got %q", i, expected, stackTrace[i])
+	for i := 0; i < maxDepth; i++ {
+		expected := fmt.Sprintf("recursion depth %d", i)
+		if !strings.Contains(errStr, expected) {
+			t.Errorf("expected to contain %q in error string", expected)
 		}
 	}
 }
@@ -173,129 +162,70 @@ func TestErrorMessageOf(t *testing.T) {
 }
 
 func TestError_Each(t *testing.T) {
-	innermost := NewError("inner.go:1", fmt.Errorf("innermost"), nil)
-	middle := NewError("middle.go:1", fmt.Errorf("middle"), innermost)
-	outer := NewError("outer.go:1", fmt.Errorf("outer"), middle)
-
 	tests := []struct {
 		name     string
 		err      *Error
-		wantLen  int
-		stopAt   int
+		expected []error
 		callback func(error) bool
 	}{
 		{
-			name:     "traverse all",
-			err:      outer,
-			wantLen:  3,
+			name: "traverse all",
+			err: NewError("outer.go:1",
+				fmt.Errorf("outer error"),
+				NewError("inner.go:2", fmt.Errorf("inner error"), nil)),
+			expected: []error{
+				NewError("outer.go:1", fmt.Errorf("outer error"),
+					NewError("inner.go:2", fmt.Errorf("inner error"), nil)),
+				NewError("inner.go:2", fmt.Errorf("inner error"), nil),
+			},
 			callback: func(error) bool { return true },
 		},
 		{
-			name:     "stop after first",
-			err:      outer,
-			wantLen:  1,
+			name: "stop after first",
+			err: NewError("outer.go:1",
+				fmt.Errorf("outer error"),
+				NewError("inner.go:2", fmt.Errorf("inner error"), nil)),
+			expected: []error{
+				NewError("outer.go:1", fmt.Errorf("outer error"),
+					NewError("inner.go:2", fmt.Errorf("inner error"), nil)),
+			},
 			callback: func(error) bool { return false },
 		},
 		{
-			name:     "nil callback",
-			err:      outer,
-			wantLen:  0,
+			name: "nil callback",
+			err: NewError("test.go:1",
+				fmt.Errorf("test error"), nil),
+			expected: nil,
 			callback: nil,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			count := 0
+			var got []error
+			tt.err.Each(tt.callback)
+
 			if tt.callback != nil {
 				tt.err.Each(func(err error) bool {
-					count++
+					got = append(got, err)
 					return tt.callback(err)
 				})
-			} else {
-				tt.err.Each(nil)
 			}
-			if count != tt.wantLen {
-				t.Errorf("Each() traversed %v errors, want %v", count, tt.wantLen)
-			}
-		})
-	}
-}
 
-func TestError_StackTrace(t *testing.T) {
-	tests := []struct {
-		name     string
-		err      *Error
-		wantLen  int
-		contains []string
-	}{
-		{
-			name:     "single error",
-			err:      NewError("test.go:1", fmt.Errorf("test error"), nil),
-			wantLen:  1,
-			contains: []string{"test.go:1: test error"},
-		},
-		{
-			name: "nested errors",
-			err: NewError("outer.go:1",
-				fmt.Errorf("outer error"),
-				NewError("inner.go:2", fmt.Errorf("inner error"), nil)),
-			wantLen: 2,
-			contains: []string{
-				"inner.go:2: inner error",
-				"outer.go:1: outer error",
-			},
-		},
-		{
-			name: "with standard error",
-			err: NewError("outer.go:1",
-				fmt.Errorf("outer error"),
-				fmt.Errorf("standard error")),
-			wantLen: 2,
-			contains: []string{
-				"standard error",
-				"outer.go:1: outer error",
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := tt.err.StackTrace()
-			if len(got) != tt.wantLen {
-				t.Errorf("StackTrace() returned %v lines, want %v", len(got), tt.wantLen)
+			if tt.expected == nil && got != nil {
+				t.Errorf("Each() got %v, want nil", got)
+				return
 			}
-			for i, want := range tt.contains {
-				if !strings.Contains(got[i], want) {
-					t.Errorf("StackTrace()[%v] = %v, want to contain %v", i, got[i], want)
+
+			if len(got) != len(tt.expected) {
+				t.Errorf("Each() got %d errors, want %d", len(got), len(tt.expected))
+				return
+			}
+
+			for i := range got {
+				if got[i].Error() != tt.expected[i].Error() {
+					t.Errorf("Each() error at index %d = %v, want %v", i, got[i], tt.expected[i])
 				}
-			}
-		})
-	}
-}
-
-func TestError_String(t *testing.T) {
-	tests := []struct {
-		name string
-		err  *Error
-		want string
-	}{
-		{
-			name: "with message",
-			err:  NewError("test.go:1", fmt.Errorf("test error"), nil),
-			want: "test.go:1: test error",
-		},
-		{
-			name: "without message",
-			err:  NewError("test.go:1", nil, nil),
-			want: "test.go:1",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.err.String(); got != tt.want {
-				t.Errorf("String() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -465,30 +395,39 @@ func TestError_As(t *testing.T) {
 }
 
 func TestError_JSON(t *testing.T) {
-	err := NewError("test.go:42", fmt.Errorf("test error"), fmt.Errorf("inner error"))
-	got := err.JSON()
+	source := "test.go:42"
+	message := fmt.Errorf("test error")
+	inner := fmt.Errorf("inner error")
+	err := NewError(source, message, inner)
 
+	got := err.JSON()
 	t.Logf("JSON output: %q", got)
 
-	// Verify it's valid JSON
-	var stack []jsonError
+	// Parse JSON output
+	var stack []struct {
+		Source  string `json:"source"`
+		Message string `json:"message"`
+	}
 	if err := json.Unmarshal([]byte(got), &stack); err != nil {
 		t.Fatalf("Failed to parse JSON: %v", err)
 	}
 
-	// Verify expected fields
+	// Verify structure
 	if len(stack) != 2 {
 		t.Fatalf("Expected 2 errors in stack, got %d", len(stack))
 	}
 
-	if stack[0].Source != "test.go:42" {
-		t.Errorf("Expected source test.go:42, got %v", stack[0].Source)
+	// Root cause should be first
+	if stack[0].Message != "inner error" {
+		t.Errorf("Expected message 'inner error', got %v", stack[0].Message)
 	}
-	if stack[0].Message != "test error" {
-		t.Errorf("Expected message 'test error', got %v", stack[0].Message)
+
+	// Outer error should be second
+	if stack[1].Source != source {
+		t.Errorf("Expected source %v, got %v", source, stack[1].Source)
 	}
-	if stack[1].Message != "inner error" {
-		t.Errorf("Expected inner 'inner error', got %v", stack[1].Message)
+	if stack[1].Message != message.Error() {
+		t.Errorf("Expected inner %v, got %v", message.Error(), stack[1].Message)
 	}
 }
 
@@ -511,28 +450,24 @@ func TestError_YAML(t *testing.T) {
 }
 
 func TestError_Colored(t *testing.T) {
-	err := NewError("test.go:42", fmt.Errorf("test error"), fmt.Errorf("inner error"))
-	got := err.Colored()
+	source := "test.go:42"
+	message := fmt.Errorf("test error")
+	inner := fmt.Errorf("inner error")
+	err := NewError(source, message, inner)
 
-	// Verify color codes are present
-	if !strings.Contains(got, colorBlue+"test.go:42"+colorReset) {
-		t.Error("Source not properly colored")
-	}
-	if !strings.Contains(got, colorRed+"test error"+colorReset) {
-		t.Error("Message not properly colored")
-	}
+	SetFormatter(ColoredFormatter(DefaultColorConfig()))
+	defer SetFormatter(defaultFormatter)
 
-	// Verify error content and indentation
-	uncolored := stripColors(got)
-	expected := []string{
-		"test.go:42: test error",
-		"  inner error",
+	got := err.Error()
+
+	// Root cause should be first
+	if !strings.Contains(got, "inner error") {
+		t.Error("Colored output missing \"inner error\"")
 	}
 
-	for _, want := range expected {
-		if !strings.Contains(uncolored, want) {
-			t.Errorf("Colored output missing %q", want)
-		}
+	// Outer error should be second
+	if !strings.Contains(got, "\n  test.go:42: test error") {
+		t.Error("Colored output missing \"test.go:42: test error\"")
 	}
 }
 

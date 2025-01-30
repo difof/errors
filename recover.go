@@ -3,6 +3,9 @@ package errors
 // recoverError handles panic recovery and converts the recovered value into an error.
 // skipFrames specifies how many stack frames to skip when creating a new error.
 func recoverError(r any, skipFrames int) error {
+	if r == nil {
+		return nil
+	}
 	if err, ok := r.(error); ok {
 		return err
 	}

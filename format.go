@@ -105,14 +105,16 @@ func (f *jsonFormatter) FormatError(filepath string, message error, inner error)
 
 	// Add current error first
 	entry := jsonError{}
+	if GetErrorConfig().ShowFuncName {
+		if e, ok := message.(*Error); ok && e.FuncPath != "" {
+			entry.FuncPath = e.FuncPath
+		}
+	}
 	if GetErrorConfig().ShowFilePath {
 		entry.FilePath = filepath
 	}
 	if message != nil {
 		entry.Message = message.Error()
-	}
-	if e, ok := message.(*Error); ok && GetErrorConfig().ShowFuncName {
-		entry.FuncPath = e.FuncPath
 	}
 	stack = append(stack, entry)
 
@@ -122,14 +124,16 @@ func (f *jsonFormatter) FormatError(filepath string, message error, inner error)
 	for current != nil {
 		if As(current, &e) {
 			entry := jsonError{}
+			if GetErrorConfig().ShowFuncName {
+				if e.FuncPath != "" {
+					entry.FuncPath = e.FuncPath
+				}
+			}
 			if GetErrorConfig().ShowFilePath {
 				entry.FilePath = e.FilePath
 			}
 			if e.Message != nil {
 				entry.Message = e.Message.Error()
-			}
-			if GetErrorConfig().ShowFuncName {
-				entry.FuncPath = e.FuncPath
 			}
 			stack = append(stack, entry)
 			current = e.Inner
@@ -194,8 +198,10 @@ func (f *yamlFormatter) FormatError(filepath string, message error, inner error)
 	if message != nil {
 		entry.Message = message.Error()
 	}
-	if e, ok := message.(*Error); ok && GetErrorConfig().ShowFuncName {
-		entry.FuncPath = e.FuncPath
+	if GetErrorConfig().ShowFuncName {
+		if e, ok := message.(*Error); ok && e.FuncPath != "" {
+			entry.FuncPath = e.FuncPath
+		}
 	}
 	stack = append(stack, entry)
 
@@ -216,7 +222,9 @@ func (f *yamlFormatter) FormatError(filepath string, message error, inner error)
 				entry.Message = e.Message.Error()
 			}
 			if GetErrorConfig().ShowFuncName {
-				entry.FuncPath = e.FuncPath
+				if e.FuncPath != "" {
+					entry.FuncPath = e.FuncPath
+				}
 			}
 			stack = append(stack, entry)
 			current = e.Inner
@@ -242,28 +250,31 @@ func (f *yamlFormatter) FormatError(filepath string, message error, inner error)
 	for _, err := range stack {
 		b.WriteString(f.config.Indent)
 		b.WriteString("- ")
-		var hasField bool
+
+		// Always write filepath first if present
 		if GetErrorConfig().ShowFilePath && err.FilePath != "" {
 			b.WriteString("filepath: ")
 			b.WriteString(err.FilePath)
-			hasField = true
-		}
-		if GetErrorConfig().ShowFuncName && err.FuncPath != "" {
-			if hasField {
+			if err.FuncPath != "" || err.Message != "" {
 				b.WriteString("\n")
 				b.WriteString(f.config.Indent)
 				b.WriteString("  ")
 			}
+		}
+
+		// Then write funcpath if present
+		if GetErrorConfig().ShowFuncName && err.FuncPath != "" {
 			b.WriteString("funcpath: ")
 			b.WriteString(err.FuncPath)
-			hasField = true
-		}
-		if err.Message != "" {
-			if hasField {
+			if err.Message != "" {
 				b.WriteString("\n")
 				b.WriteString(f.config.Indent)
 				b.WriteString("  ")
 			}
+		}
+
+		// Finally write message if present
+		if err.Message != "" {
 			b.WriteString("message: ")
 			b.WriteString(err.Message)
 		}
@@ -336,8 +347,10 @@ func (f *coloredFormatter) FormatError(filepath string, message error, inner err
 	if message != nil {
 		entry.Message = message.Error()
 	}
-	if e, ok := message.(*Error); ok && GetErrorConfig().ShowFuncName {
-		entry.FuncPath = e.FuncPath
+	if GetErrorConfig().ShowFuncName {
+		if e, ok := message.(*Error); ok {
+			entry.FuncPath = e.FuncPath
+		}
 	}
 	stack = append(stack, entry)
 
@@ -407,9 +420,11 @@ func (f *coloredFormatter) FormatStack(filepath string, message error) string {
 	var b strings.Builder
 	b.WriteString("at ")
 
-	if e, ok := message.(*Error); ok && GetErrorConfig().ShowFuncName && e.FuncPath != "" {
-		b.WriteString(f.config.InnerColor.Sprint(e.FuncPath))
-		b.WriteString(" ")
+	if GetErrorConfig().ShowFuncName {
+		if e, ok := message.(*Error); ok && e.FuncPath != "" {
+			b.WriteString(f.config.InnerColor.Sprint(e.FuncPath))
+			b.WriteString(" ")
+		}
 	}
 
 	if GetErrorConfig().ShowFilePath {
@@ -417,7 +432,7 @@ func (f *coloredFormatter) FormatStack(filepath string, message error) string {
 	}
 
 	if message != nil {
-		if GetErrorConfig().ShowFilePath || (message.(*Error) != nil && GetErrorConfig().ShowFuncName) {
+		if GetErrorConfig().ShowFilePath || (GetErrorConfig().ShowFuncName && message.(*Error) != nil) {
 			b.WriteString(": ")
 		}
 		b.WriteString(f.config.MessageColor.Sprint(message.Error()))

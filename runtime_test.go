@@ -1,201 +1,91 @@
 package errors
 
 import (
-	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-func TestSetShowFuncName(t *testing.T) {
-	tests := []struct {
-		name     string
-		state    bool
-		expected bool
-	}{
-		{"Enable function name display", true, true},
-		{"Disable function name display", false, false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			SetErrorConfig(WithShowFuncName(tt.state))
-			if GetErrorConfig().ShowFuncName != tt.expected {
-				t.Errorf("SetErrorConfig(WithShowFuncName(%v)) = %v, want %v", tt.state, GetErrorConfig().ShowFuncName, tt.expected)
-			}
-		})
-	}
-}
-
-func TestSetShowPackageName(t *testing.T) {
-	tests := []struct {
-		name     string
-		state    bool
-		expected bool
-	}{
-		{"Enable package name display", true, true},
-		{"Disable package name display", false, false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			SetErrorConfig(WithShowPackageName(tt.state))
-			if GetErrorConfig().ShowPackageName != tt.expected {
-				t.Errorf("SetErrorConfig(WithShowPackageName(%v)) = %v, want %v", tt.state, GetErrorConfig().ShowPackageName, tt.expected)
-			}
-		})
-	}
-}
-
 func TestGetCallerPath(t *testing.T) {
+	// Helper function to test getCallerPath at different levels
+	testFunc := func() (string, string, int) {
+		return getCallerPath(0)
+	}
+
+	// Nested function to test multiple stack levels
+	nestedTestFunc := func() (string, string, int) {
+		return testFunc()
+	}
+
 	tests := []struct {
-		name            string
-		skipFrames      int
-		showFunc        bool
-		showPackage     bool
-		expectedPattern string
+		name         string
+		skipLevel    int
+		caller       func() (string, string, int)
+		wantFuncName string
+		wantFilePath string
+		wantLine     int
+		wantContains bool // true if we want to check contains instead of exact match
 	}{
 		{
-			name:            "No function name",
-			skipFrames:      0,
-			showFunc:        false,
-			showPackage:     false,
-			expectedPattern: ".go:[0-9]+$",
+			name:         "direct call with skip 0",
+			skipLevel:    0,
+			caller:       func() (string, string, int) { return getCallerPath(0) },
+			wantFuncName: "github.com/difof/errors.TestGetCallerPath.func",
+			wantFilePath: "runtime_test.go",
+			wantLine:     0, // Line number will vary, we'll check if > 0
+			wantContains: true,
 		},
 		{
-			name:            "With function name, no package",
-			skipFrames:      0,
-			showFunc:        true,
-			showPackage:     false,
-			expectedPattern: "at TestGetCallerPath .go:[0-9]+$",
+			name:         "call through helper function",
+			skipLevel:    0,
+			caller:       testFunc,
+			wantFuncName: "github.com/difof/errors.TestGetCallerPath",
+			wantFilePath: "runtime_test.go",
+			wantLine:     0, // Line number will vary, we'll check if > 0
+			wantContains: true,
 		},
 		{
-			name:            "With function name and package",
-			skipFrames:      0,
-			showFunc:        true,
-			showPackage:     true,
-			expectedPattern: "at github.com/difof/errors.TestGetCallerPath .go:[0-9]+$",
+			name:         "nested call",
+			skipLevel:    0,
+			caller:       nestedTestFunc,
+			wantFuncName: "github.com/difof/errors.TestGetCallerPath",
+			wantFilePath: "runtime_test.go",
+			wantLine:     0, // Line number will vary, we'll check if > 0
+			wantContains: true,
 		},
 		{
-			name:            "Invalid skip frames",
-			skipFrames:      1000,
-			showFunc:        false,
-			showPackage:     false,
-			expectedPattern: "^<no source>$",
+			name:         "invalid skip level",
+			skipLevel:    1000, // Very high skip level to force failure
+			caller:       func() (string, string, int) { return getCallerPath(1000) },
+			wantFuncName: "",
+			wantFilePath: NO_SOURCE,
+			wantLine:     0,
+			wantContains: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			SetErrorConfig(WithShowFuncName(tt.showFunc), WithShowPackageName(tt.showPackage))
+			funcName, filePath, line := tt.caller()
 
-			result := getCallerPath(tt.skipFrames)
-
-			if !strings.Contains(result, ".go:") && tt.expectedPattern != "^<no source>$" {
-				t.Errorf("getCallerPath(%d) = %q, expected to contain '.go:'", tt.skipFrames, result)
-			}
-
-			if tt.expectedPattern == "^<no source>$" && result != "<no source>" {
-				t.Errorf("getCallerPath(%d) = %q, want '<no source>'", tt.skipFrames, result)
-			}
-		})
-	}
-}
-
-func TestStripPackageName(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{
-			name:     "Full package path",
-			input:    "github.com/user/pkg.Function",
-			expected: "pkg.Function",
-		},
-		{
-			name:     "No package path",
-			input:    "Function",
-			expected: "Function",
-		},
-		{
-			name:     "Multiple dots",
-			input:    "github.com.user.pkg.Function",
-			expected: "github.com.user.pkg.Function",
-		},
-		{
-			name:     "Empty string",
-			input:    "",
-			expected: ".",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := stripPackageName(tt.input)
-			if result != tt.expected {
-				t.Errorf("stripPackageName(%q) = %q, want %q", tt.input, result, tt.expected)
+			if tt.wantContains {
+				if tt.name == "direct call with skip 0" {
+					// For direct call, just check if it contains the base pattern
+					assert.True(t, strings.Contains(funcName, "github.com/difof/errors.TestGetCallerPath.func"),
+						"Expected function name to contain %q, got %q",
+						"github.com/difof/errors.TestGetCallerPath.func",
+						funcName)
+				} else {
+					assert.Contains(t, funcName, tt.wantFuncName)
+				}
+				assert.Contains(t, filePath, tt.wantFilePath)
+				assert.Greater(t, line, 0)
+			} else {
+				assert.Equal(t, tt.wantFuncName, funcName)
+				assert.Equal(t, tt.wantFilePath, filePath)
+				assert.Equal(t, tt.wantLine, line)
 			}
 		})
 	}
-}
-
-func TestRuntimeIntegration(t *testing.T) {
-	// Test the interaction between different settings
-	tests := []struct {
-		name        string
-		showFunc    bool
-		showPackage bool
-		showPath    bool
-		validate    func(string) bool
-	}{
-		{
-			name:        "All disabled",
-			showFunc:    false,
-			showPackage: false,
-			showPath:    false,
-			validate: func(s string) bool {
-				return s == ""
-			},
-		},
-		{
-			name:        "Only function enabled",
-			showFunc:    true,
-			showPackage: false,
-			showPath:    false,
-			validate: func(s string) bool {
-				return strings.Contains(s, "at ") &&
-					strings.Contains(s, "tRunner") &&
-					!strings.Contains(s, "github.com") &&
-					!strings.Contains(s, ".go:")
-			},
-		},
-		{
-			name:        "All enabled",
-			showFunc:    true,
-			showPackage: true,
-			showPath:    true,
-			validate: func(s string) bool {
-				return strings.Contains(s, "at ") &&
-					strings.Contains(s, ".go:") &&
-					strings.Contains(s, "testing.tRunner")
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			SetErrorConfig(WithShowFuncName(tt.showFunc), WithShowPackageName(tt.showPackage), WithShowFilePath(tt.showPath))
-
-			result := getCallerPath(0)
-			if !tt.validate(result) {
-				t.Errorf("Integration test failed for %s, got: %s", tt.name, result)
-			}
-		})
-	}
-}
-
-// Helper function to get current package name
-func getCurrentPackage() string {
-	pc, _, _, _ := runtime.Caller(0)
-	return runtime.FuncForPC(pc).Name()
 }

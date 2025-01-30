@@ -115,10 +115,11 @@ tasks:
   build:demo:
     desc: Build the formatter demo
     silent: true
-    cmd: go build -o out/formatter_demo ./cmd/formatter_demo.go
+    cmd: go build -o out/formatter_demo ./demo/formatter_demo.go
 
   run:demo:
     desc: Run the formatter demo
+    aliases: [demo,run]
     silent: true
     deps: [build:demo]
     cmd: ./out/formatter_demo

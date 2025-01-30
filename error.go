@@ -2,8 +2,6 @@ package errors
 
 import (
 	goerrors "errors"
-	"fmt"
-	"strings"
 )
 
 // Error is a lightweight drop-in replacement for standard errors package with stacktrace.
@@ -127,43 +125,7 @@ func (e *Error) Colored() string {
 // Error implements the error interface and returns the complete
 // stack trace of this error as a newline-separated string.
 func (e *Error) Error() string {
-	var stack []string
-
-	// Build the stack in reverse order (innermost first)
-	var current error = e
-	for current != nil {
-		var e *Error
-		if As(current, &e) {
-			if e.Message != nil {
-				if e.FuncPath != "" {
-					stack = append([]string{fmt.Sprintf("at %s %s: %s", e.FuncPath, e.FilePath, e.Message.Error())}, stack...)
-				} else {
-					stack = append([]string{fmt.Sprintf("at %s: %s", e.FilePath, e.Message.Error())}, stack...)
-				}
-			} else {
-				if e.FuncPath != "" {
-					stack = append([]string{fmt.Sprintf("at %s %s", e.FuncPath, e.FilePath)}, stack...)
-				} else {
-					stack = append([]string{fmt.Sprintf("at %s", e.FilePath)}, stack...)
-				}
-			}
-			current = e.Inner
-		} else {
-			stack = append([]string{current.Error()}, stack...)
-			break
-		}
-	}
-
-	// Build the output with proper indentation
-	var b strings.Builder
-	for i, err := range stack {
-		if i > 0 {
-			b.WriteString("\n  ")
-		}
-		b.WriteString(err)
-	}
-
-	return b.String()
+	return TextFormatter(DefaultTextConfig()).FormatError(e.FilePath, e.Message, e.Inner)
 }
 
 // Unwrap returns the inner error, implementing the interface

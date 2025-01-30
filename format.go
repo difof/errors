@@ -27,29 +27,34 @@ type textFormatter struct {
 }
 
 func (f *textFormatter) FormatError(source string, message error, inner error) string {
-	var b strings.Builder
-	if message == nil {
-		b.WriteString(source)
-		return b.String()
-	}
+	var stack []string
 
-	b.WriteString(fmt.Sprintf("%s: %s", source, message.Error()))
-	if inner != nil {
-		var e *Error
-		for current := inner; current != nil; {
-			if As(current, &e) {
-				b.WriteString("\n")
-				b.WriteString(f.config.Indent)
-				b.WriteString(fmt.Sprintf("%s: %s", e.Source, e.Message.Error()))
-				current = e.Inner
-			} else {
-				b.WriteString("\n")
-				b.WriteString(f.config.Indent)
-				b.WriteString(current.Error())
-				break
-			}
+	// Build the stack in reverse order (innermost first)
+	var current error = inner
+	var e *Error
+	for current != nil {
+		if As(current, &e) {
+			stack = append([]string{fmt.Sprintf("%s: %s", e.Source, e.Message.Error())}, stack...)
+			current = e.Inner
+		} else {
+			stack = append([]string{current.Error()}, stack...)
+			break
 		}
 	}
+
+	// Add the current error last
+	stack = append(stack, fmt.Sprintf("%s: %s", source, message.Error()))
+
+	// Build the output with proper indentation
+	var b strings.Builder
+	for i, err := range stack {
+		if i > 0 {
+			b.WriteString("\n")
+			b.WriteString(f.config.Indent)
+		}
+		b.WriteString(err)
+	}
+
 	return b.String()
 }
 
@@ -81,31 +86,29 @@ type jsonFormatter struct {
 func (f *jsonFormatter) FormatError(source string, message error, inner error) string {
 	var stack []jsonError
 
-	// Add current error
-	current := jsonError{Source: source}
-	if message != nil {
-		current.Message = message.Error()
-	}
-	stack = append(stack, current)
-
-	// Add inner errors recursively
-	if inner != nil {
-		var e *Error
-		for current := inner; current != nil; {
-			if As(current, &e) {
-				stack = append(stack, jsonError{
-					Source:  e.Source,
-					Message: e.Message.Error(),
-				})
-				current = e.Inner
-			} else {
-				stack = append(stack, jsonError{
-					Message: current.Error(),
-				})
-				break
-			}
+	// Build the stack in reverse order (innermost first)
+	var current error = inner
+	var e *Error
+	for current != nil {
+		if As(current, &e) {
+			stack = append([]jsonError{{
+				Source:  e.Source,
+				Message: e.Message.Error(),
+			}}, stack...)
+			current = e.Inner
+		} else {
+			stack = append([]jsonError{{
+				Message: current.Error(),
+			}}, stack...)
+			break
 		}
 	}
+
+	// Add the current error last
+	stack = append(stack, jsonError{
+		Source:  source,
+		Message: message.Error(),
+	})
 
 	data, _ := json.MarshalIndent(stack, f.config.Prefix, f.config.Indent)
 	return string(data)
@@ -132,45 +135,60 @@ type yamlFormatter struct {
 }
 
 func (f *yamlFormatter) FormatError(source string, message error, inner error) string {
-	var b strings.Builder
-	b.WriteString("errors:\n")
-
-	// Add current error
-	b.WriteString(f.config.Indent)
-	b.WriteString("- source: ")
-	b.WriteString(source)
-	if message != nil {
-		b.WriteString("\n")
-		b.WriteString(f.config.Indent)
-		b.WriteString("  message: ")
-		b.WriteString(message.Error())
+	var stack []struct {
+		Source  string
+		Message string
 	}
 
-	// Add inner errors recursively
-	if inner != nil {
-		var e *Error
-		for current := inner; current != nil; {
-			if As(current, &e) {
-				b.WriteString("\n")
-				b.WriteString(f.config.Indent)
-				b.WriteString("- source: ")
-				b.WriteString(e.Source)
-				if e.Message != nil {
-					b.WriteString("\n")
-					b.WriteString(f.config.Indent)
-					b.WriteString("  message: ")
-					b.WriteString(e.Message.Error())
-				}
-				current = e.Inner
-			} else {
-				b.WriteString("\n")
-				b.WriteString(f.config.Indent)
-				b.WriteString("- message: ")
-				b.WriteString(current.Error())
-				break
-			}
+	// Build the stack in reverse order (innermost first)
+	var current error = inner
+	var e *Error
+	for current != nil {
+		if As(current, &e) {
+			stack = append([]struct {
+				Source  string
+				Message string
+			}{{
+				Source:  e.Source,
+				Message: e.Message.Error(),
+			}}, stack...)
+			current = e.Inner
+		} else {
+			stack = append([]struct {
+				Source  string
+				Message string
+			}{{
+				Message: current.Error(),
+			}}, stack...)
+			break
 		}
 	}
+
+	// Add the current error last
+	stack = append(stack, struct {
+		Source  string
+		Message string
+	}{
+		Source:  source,
+		Message: message.Error(),
+	})
+
+	// Build YAML output
+	var b strings.Builder
+	b.WriteString("errors:\n")
+	for _, err := range stack {
+		b.WriteString(f.config.Indent)
+		b.WriteString("- source: ")
+		b.WriteString(err.Source)
+		if err.Message != "" {
+			b.WriteString("\n")
+			b.WriteString(f.config.Indent)
+			b.WriteString("  message: ")
+			b.WriteString(err.Message)
+		}
+		b.WriteString("\n")
+	}
+
 	return b.String()
 }
 
@@ -211,47 +229,62 @@ type coloredFormatter struct {
 }
 
 func (f *coloredFormatter) FormatError(source string, message error, inner error) string {
-	var b strings.Builder
-
-	// Format current error
-	b.WriteString(f.config.SourceColor)
-	b.WriteString(source)
-	b.WriteString(colorReset)
-
-	if message != nil {
-		b.WriteString(": ")
-		b.WriteString(f.config.MessageColor)
-		b.WriteString(message.Error())
-		b.WriteString(colorReset)
+	var stack []struct {
+		Source  string
+		Message string
 	}
 
-	// Format inner errors recursively with indentation
-	if inner != nil {
-		var e *Error
-		for current := inner; current != nil; {
-			if As(current, &e) {
-				b.WriteString("\n")
-				b.WriteString("  ")
-				b.WriteString(f.config.SourceColor)
-				b.WriteString(e.Source)
-				b.WriteString(colorReset)
-				if e.Message != nil {
-					b.WriteString(": ")
-					b.WriteString(f.config.MessageColor)
-					b.WriteString(e.Message.Error())
-					b.WriteString(colorReset)
-				}
-				current = e.Inner
-			} else {
-				b.WriteString("\n")
-				b.WriteString("  ")
-				b.WriteString(f.config.MessageColor)
-				b.WriteString(current.Error())
-				b.WriteString(colorReset)
-				break
-			}
+	// Build the stack in reverse order (innermost first)
+	var current error = inner
+	var e *Error
+	for current != nil {
+		if As(current, &e) {
+			stack = append([]struct {
+				Source  string
+				Message string
+			}{{
+				Source:  e.Source,
+				Message: e.Message.Error(),
+			}}, stack...)
+			current = e.Inner
+		} else {
+			stack = append([]struct {
+				Source  string
+				Message string
+			}{{
+				Message: current.Error(),
+			}}, stack...)
+			break
 		}
 	}
+
+	// Add the current error last
+	stack = append(stack, struct {
+		Source  string
+		Message string
+	}{
+		Source:  source,
+		Message: message.Error(),
+	})
+
+	// Build colored output
+	var b strings.Builder
+	for i, err := range stack {
+		if i > 0 {
+			b.WriteString("\n")
+			b.WriteString("  ")
+		}
+		b.WriteString(f.config.SourceColor)
+		b.WriteString(err.Source)
+		b.WriteString(colorReset)
+		if err.Message != "" {
+			b.WriteString(": ")
+			b.WriteString(f.config.MessageColor)
+			b.WriteString(err.Message)
+			b.WriteString(colorReset)
+		}
+	}
+
 	return b.String()
 }
 

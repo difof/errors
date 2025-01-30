@@ -2,6 +2,8 @@ package errors
 
 import (
 	goerrors "errors"
+	"fmt"
+	"strings"
 )
 
 // Error is a lightweight drop-in replacement for standard errors package with stacktrace.
@@ -86,22 +88,23 @@ func (e *Error) Each(it func(err error) bool) {
 func (e *Error) StackTrace() (list []string) {
 	list = make([]string, 0, 5)
 
-	defer func() {
-		// reverse to show root cause first
-		for i, j := 0, len(list)-1; i < j; i, j = i+1, j-1 {
-			list[i], list[j] = list[j], list[i]
-		}
-	}()
-
-	e.Each(func(err error) bool {
+	// Build the stack in reverse order (innermost first)
+	var current error = e
+	for current != nil {
 		var e *Error
-		if As(err, &e) {
+		if As(current, &e) {
 			list = append(list, e.String())
+			current = e.Inner
 		} else {
-			list = append(list, err.Error())
+			list = append(list, current.Error())
+			break
 		}
-		return true
-	})
+	}
+
+	// Reverse the stack so root cause is first
+	for i, j := 0, len(list)-1; i < j; i, j = i+1, j-1 {
+		list[i], list[j] = list[j], list[i]
+	}
 
 	return
 }
@@ -153,7 +156,31 @@ func (e *Error) ErrorMessage() (msg string) {
 // Error implements the error interface and returns the complete
 // stack trace of this error as a newline-separated string.
 func (e *Error) Error() string {
-	return GetFormatter().FormatError(e.Source, e.Message, e.Inner)
+	var stack []string
+
+	// Build the stack in reverse order (innermost first)
+	var current error = e
+	for current != nil {
+		var e *Error
+		if As(current, &e) {
+			stack = append([]string{fmt.Sprintf("%s: %s", e.Source, e.Message.Error())}, stack...)
+			current = e.Inner
+		} else {
+			stack = append([]string{current.Error()}, stack...)
+			break
+		}
+	}
+
+	// Build the output with proper indentation
+	var b strings.Builder
+	for i, err := range stack {
+		if i > 0 {
+			b.WriteString("\n  ")
+		}
+		b.WriteString(err)
+	}
+
+	return b.String()
 }
 
 // Unwrap returns the inner error, implementing the interface

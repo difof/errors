@@ -10,12 +10,11 @@ import (
 
 // createDeepError creates a deeply nested error chain to demonstrate stack traces
 func createDeepError(depth int) error {
+	_, file, line, _ := runtime.Caller(1)
 	if depth == 0 {
-		_, file, line, _ := runtime.Caller(1)
 		return errors.NewError(fmt.Sprintf("%s:%d", file, line), fmt.Errorf("root cause error"), nil)
 	}
 
-	_, file, line, _ := runtime.Caller(1)
 	innerErr := createDeepError(depth - 1)
 	return errors.NewError(
 		fmt.Sprintf("%s:%d", file, line),

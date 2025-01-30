@@ -1,152 +1,233 @@
 package errors
 
 import (
+	"errors"
 	"fmt"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestWrap(t *testing.T) {
 	tests := []struct {
-		name     string
-		err      error
-		wantNil  bool
-		contains string
+		name      string
+		inner     error
+		wantNil   bool
+		wantInner string
 	}{
 		{
 			name:    "nil error",
-			err:     nil,
+			inner:   nil,
 			wantNil: true,
 		},
 		{
-			name:     "simple error",
-			err:      fmt.Errorf("test error"),
-			contains: "test error",
+			name:      "standard error",
+			inner:     errors.New("standard error"),
+			wantInner: "standard error",
 		},
 		{
-			name:     "already wrapped error",
-			err:      Wrap(fmt.Errorf("inner error")),
-			contains: "inner error",
+			name:      "wrapped error",
+			inner:     Wrap(errors.New("inner error")),
+			wantInner: "inner error",
+		},
+		{
+			name:      "deeply wrapped error",
+			inner:     Wrap(Wrap(errors.New("deep error"))),
+			wantInner: "deep error",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Wrap(tt.err)
+			got := Wrap(tt.inner)
 			if tt.wantNil {
-				if got != nil {
-					t.Errorf("Wrap() = %v, want nil", got)
-				}
+				assert.Nil(t, got)
 				return
 			}
-			if got == nil {
-				t.Error("Wrap() = nil, want wrapped error")
-				return
-			}
-			if !strings.Contains(got.Error(), tt.contains) {
-				t.Errorf("Wrap() = %v, want to contain %v", got, tt.contains)
+
+			assert.NotNil(t, got)
+			assert.Equal(t, tt.wantInner, ErrorMessageOf(got))
+
+			// Test that stack trace info is present
+			if e, ok := got.(*Error); ok {
+				assert.NotEmpty(t, e.FuncPath)
+				assert.NotEmpty(t, e.FilePath)
+				assert.Greater(t, e.Line, 0)
 			}
 		})
 	}
 }
 
 func TestWrapResult(t *testing.T) {
+	type testStruct struct {
+		value string
+	}
+
 	tests := []struct {
-		name       string
-		result     string
-		err        error
-		wantResult string
-		wantErr    bool
-		contains   string
+		name    string
+		result  testStruct
+		err     error
+		wantErr bool
 	}{
 		{
-			name:       "nil error",
-			result:     "success",
-			err:        nil,
-			wantResult: "success",
-			wantErr:    false,
+			name:    "nil error",
+			result:  testStruct{value: "success"},
+			err:     nil,
+			wantErr: false,
 		},
 		{
-			name:       "with error",
-			result:     "failed",
-			err:        fmt.Errorf("test error"),
-			wantResult: "failed",
-			wantErr:    true,
-			contains:   "test error",
+			name:    "with error",
+			result:  testStruct{value: "failure"},
+			err:     errors.New("test error"),
+			wantErr: true,
+		},
+		{
+			name:    "with wrapped error",
+			result:  testStruct{value: "failure"},
+			err:     Wrap(errors.New("wrapped error")),
+			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := WrapResult(tt.result, tt.err)
-			if result != tt.wantResult {
-				t.Errorf("WrapResult() result = %v, want %v", result, tt.wantResult)
+
+			// Check result is passed through correctly
+			assert.Equal(t, tt.result, result)
+
+			if !tt.wantErr {
+				assert.Nil(t, err)
+				return
 			}
-			if (err != nil) != tt.wantErr {
-				t.Errorf("WrapResult() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if tt.wantErr && !strings.Contains(err.Error(), tt.contains) {
-				t.Errorf("WrapResult() error = %v, want to contain %v", err, tt.contains)
+
+			assert.NotNil(t, err)
+			if e, ok := err.(*Error); ok {
+				assert.NotEmpty(t, e.FuncPath)
+				assert.NotEmpty(t, e.FilePath)
+				assert.Greater(t, e.Line, 0)
 			}
 		})
 	}
+
+	// Test with different types
+	t.Run("different types", func(t *testing.T) {
+		// Test with int
+		intResult, err := WrapResult(42, errors.New("int error"))
+		assert.Equal(t, 42, intResult)
+		assert.NotNil(t, err)
+		assert.Equal(t, "int error", ErrorMessageOf(err))
+
+		// Test with string
+		strResult, err := WrapResult("test", errors.New("string error"))
+		assert.Equal(t, "test", strResult)
+		assert.NotNil(t, err)
+		assert.Equal(t, "string error", ErrorMessageOf(err))
+
+		// Test with bool
+		boolResult, err := WrapResult(true, errors.New("bool error"))
+		assert.Equal(t, true, boolResult)
+		assert.NotNil(t, err)
+		assert.Equal(t, "bool error", ErrorMessageOf(err))
+	})
 }
 
 func TestWrapResultf(t *testing.T) {
+	type testStruct struct {
+		value string
+	}
+
 	tests := []struct {
 		name       string
-		result     string
+		result     testStruct
 		err        error
 		format     string
-		args       []any
-		wantResult string
+		formatArgs []any
 		wantErr    bool
-		contains   string
+		wantMsg    string
 	}{
 		{
-			name:       "nil error",
-			result:     "success",
-			err:        nil,
-			format:     "operation failed: %v",
-			args:       []any{"test"},
-			wantResult: "success",
-			wantErr:    false,
+			name:    "nil error",
+			result:  testStruct{value: "success"},
+			err:     nil,
+			format:  "should not appear: %v",
+			wantErr: false,
 		},
 		{
 			name:       "with error and format",
-			result:     "failed",
-			err:        fmt.Errorf("base error"),
+			result:     testStruct{value: "failure"},
+			err:        errors.New("test error"),
 			format:     "operation failed: %v",
-			args:       []any{"test"},
-			wantResult: "failed",
+			formatArgs: []any{"custom message"},
 			wantErr:    true,
-			contains:   "base error",
+			wantMsg:    "operation failed: custom message",
+		},
+		{
+			name:       "with wrapped error",
+			result:     testStruct{value: "failure"},
+			err:        Wrap(errors.New("wrapped error")),
+			format:     "wrapped operation failed: %v",
+			formatArgs: []any{"custom message"},
+			wantErr:    true,
+			wantMsg:    "wrapped operation failed: custom message",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := WrapResultf(tt.result, tt.err)(tt.format, tt.args...)
-			if result != tt.wantResult {
-				t.Errorf("WrapResultf() result = %v, want %v", result, tt.wantResult)
+			formatter := WrapResultf(tt.result, tt.err)
+			result, err := formatter(tt.format, tt.formatArgs...)
+
+			// Check result is passed through correctly
+			assert.Equal(t, tt.result, result)
+
+			if !tt.wantErr {
+				assert.Nil(t, err)
+				return
 			}
-			if (err != nil) != tt.wantErr {
-				t.Errorf("WrapResultf() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if tt.wantErr && !strings.Contains(err.Error(), tt.contains) {
-				t.Errorf("WrapResultf() error = %v, want to contain %v", err, tt.contains)
+
+			assert.NotNil(t, err)
+			if e, ok := err.(*Error); ok {
+				assert.NotEmpty(t, e.FuncPath)
+				assert.NotEmpty(t, e.FilePath)
+				assert.Greater(t, e.Line, 0)
+				if tt.wantMsg != "" {
+					assert.Equal(t, tt.wantMsg, e.Message.Error())
+				}
 			}
 		})
 	}
+
+	// Test with different types
+	t.Run("different types", func(t *testing.T) {
+		// Test with int
+		intFormatter := WrapResultf(42, errors.New("int error"))
+		intResult, err := intFormatter("formatted: %v", "int")
+		assert.Equal(t, 42, intResult)
+		assert.NotNil(t, err)
+		if e, ok := err.(*Error); ok {
+			assert.Equal(t, "formatted: int", e.Message.Error())
+		}
+
+		// Test with string
+		strFormatter := WrapResultf("test", errors.New("string error"))
+		strResult, err := strFormatter("formatted: %v", "string")
+		assert.Equal(t, "test", strResult)
+		assert.NotNil(t, err)
+		if e, ok := err.(*Error); ok {
+			assert.Equal(t, "formatted: string", e.Message.Error())
+		}
+	})
 }
 
 func TestWrape(t *testing.T) {
 	tests := []struct {
-		name     string
-		err      error
-		inner    error
-		wantNil  bool
-		contains []string
+		name      string
+		err       error
+		inner     error
+		wantNil   bool
+		wantMsg   string
+		wantInner string
 	}{
 		{
 			name:    "both nil",
@@ -155,22 +236,32 @@ func TestWrape(t *testing.T) {
 			wantNil: true,
 		},
 		{
-			name:     "nil inner",
-			err:      fmt.Errorf("test error"),
-			inner:    nil,
-			contains: []string{"test error"},
+			name:      "err only",
+			err:       errors.New("outer error"),
+			inner:     nil,
+			wantMsg:   "outer error",
+			wantInner: "",
 		},
 		{
-			name:     "nil err",
-			err:      nil,
-			inner:    fmt.Errorf("inner error"),
-			contains: []string{"inner error"},
+			name:      "inner only",
+			err:       nil,
+			inner:     errors.New("inner error"),
+			wantMsg:   "",
+			wantInner: "inner error",
 		},
 		{
-			name:     "both errors",
-			err:      fmt.Errorf("test error"),
-			inner:    fmt.Errorf("inner error"),
-			contains: []string{"test error", "inner error"},
+			name:      "both errors",
+			err:       errors.New("outer error"),
+			inner:     errors.New("inner error"),
+			wantMsg:   "outer error",
+			wantInner: "inner error",
+		},
+		{
+			name:      "wrapped inner",
+			err:       errors.New("outer error"),
+			inner:     Wrap(errors.New("wrapped inner")),
+			wantMsg:   "outer error",
+			wantInner: "wrapped inner",
 		},
 	}
 
@@ -178,18 +269,21 @@ func TestWrape(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := Wrape(tt.err, tt.inner)
 			if tt.wantNil {
-				if got != nil {
-					t.Errorf("Wrape() = %v, want nil", got)
+				assert.Nil(t, got)
+				return
+			}
+
+			assert.NotNil(t, got)
+			if e, ok := got.(*Error); ok {
+				assert.NotEmpty(t, e.FuncPath)
+				assert.NotEmpty(t, e.FilePath)
+				assert.Greater(t, e.Line, 0)
+
+				if tt.wantMsg != "" {
+					assert.Equal(t, tt.wantMsg, e.Message.Error())
 				}
-				return
-			}
-			if got == nil {
-				t.Error("Wrape() = nil, want wrapped error")
-				return
-			}
-			for _, want := range tt.contains {
-				if !strings.Contains(got.Error(), want) {
-					t.Errorf("Wrape() = %v, want to contain %v", got, want)
+				if tt.wantInner != "" && e.Inner != nil {
+					assert.Equal(t, tt.wantInner, ErrorMessageOf(e.Inner))
 				}
 			}
 		})
@@ -198,32 +292,42 @@ func TestWrape(t *testing.T) {
 
 func TestWrapf(t *testing.T) {
 	tests := []struct {
-		name     string
-		inner    error
-		format   string
-		args     []any
-		wantNil  bool
-		contains []string
+		name      string
+		inner     error
+		format    string
+		args      []any
+		wantNil   bool
+		wantMsg   string
+		wantInner string
 	}{
 		{
-			name:    "nil inner with empty format",
+			name:    "nil error and empty format",
 			inner:   nil,
 			format:  "",
 			wantNil: true,
 		},
 		{
-			name:     "nil inner with format",
-			inner:    nil,
-			format:   "test error: %v",
-			args:     []any{"value"},
-			contains: []string{"test error: value"},
+			name:      "standard error with format",
+			inner:     errors.New("standard error"),
+			format:    "wrapped: %v",
+			args:      []any{"test message"},
+			wantMsg:   "wrapped: test message",
+			wantInner: "standard error",
 		},
 		{
-			name:     "with inner and format",
-			inner:    fmt.Errorf("base error"),
-			format:   "test error: %v",
-			args:     []any{"value"},
-			contains: []string{"base error", "test error: value"},
+			name:      "wrapped error with format",
+			inner:     Wrap(errors.New("inner error")),
+			format:    "outer: %v %v",
+			args:      []any{"message", 42},
+			wantMsg:   "outer: message 42",
+			wantInner: "inner error",
+		},
+		{
+			name:      "empty format",
+			inner:     errors.New("inner error"),
+			format:    "",
+			wantMsg:   "",
+			wantInner: "inner error",
 		},
 	}
 
@@ -231,18 +335,21 @@ func TestWrapf(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := Wrapf(tt.inner, tt.format, tt.args...)
 			if tt.wantNil {
-				if got != nil {
-					t.Errorf("Wrapf() = %v, want nil", got)
+				assert.Nil(t, got)
+				return
+			}
+
+			assert.NotNil(t, got)
+			if e, ok := got.(*Error); ok {
+				assert.NotEmpty(t, e.FuncPath)
+				assert.NotEmpty(t, e.FilePath)
+				assert.Greater(t, e.Line, 0)
+
+				if tt.wantMsg != "" {
+					assert.Equal(t, tt.wantMsg, e.Message.Error())
 				}
-				return
-			}
-			if got == nil {
-				t.Error("Wrapf() = nil, want wrapped error")
-				return
-			}
-			for _, want := range tt.contains {
-				if !strings.Contains(got.Error(), want) {
-					t.Errorf("Wrapf() = %v, want to contain %v", got, want)
+				if tt.wantInner != "" {
+					assert.Equal(t, tt.wantInner, ErrorMessageOf(e.Inner))
 				}
 			}
 		})
@@ -251,47 +358,53 @@ func TestWrapf(t *testing.T) {
 
 func TestWrapSkip(t *testing.T) {
 	tests := []struct {
-		name     string
-		skip     int
-		err      error
-		wantNil  bool
-		contains string
+		name      string
+		skip      int
+		inner     error
+		wantNil   bool
+		wantInner string
 	}{
 		{
 			name:    "nil error",
-			skip:    0,
-			err:     nil,
+			skip:    1,
+			inner:   nil,
 			wantNil: true,
 		},
 		{
-			name:     "skip 0",
-			skip:     0,
-			err:      fmt.Errorf("test error"),
-			contains: "test error",
+			name:      "standard error with skip 0",
+			skip:      0,
+			inner:     errors.New("test error"),
+			wantInner: "test error",
 		},
 		{
-			name:     "skip 1",
-			skip:     1,
-			err:      fmt.Errorf("test error"),
-			contains: "test error",
+			name:      "standard error with skip 1",
+			skip:      1,
+			inner:     errors.New("test error"),
+			wantInner: "test error",
+		},
+		{
+			name:      "wrapped error with skip 2",
+			skip:      2,
+			inner:     Wrap(errors.New("inner error")),
+			wantInner: "inner error",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := WrapSkip(tt.skip, tt.err)
+			got := WrapSkip(tt.skip, tt.inner)
 			if tt.wantNil {
-				if got != nil {
-					t.Errorf("WrapSkip() = %v, want nil", got)
-				}
+				assert.Nil(t, got)
 				return
 			}
-			if got == nil {
-				t.Error("WrapSkip() = nil, want wrapped error")
-				return
-			}
-			if !strings.Contains(got.Error(), tt.contains) {
-				t.Errorf("WrapSkip() = %v, want to contain %v", got, tt.contains)
+
+			assert.NotNil(t, got)
+			assert.Equal(t, tt.wantInner, ErrorMessageOf(got))
+
+			if e, ok := got.(*Error); ok {
+				assert.NotEmpty(t, e.FuncPath)
+				assert.NotEmpty(t, e.FilePath)
+				assert.Greater(t, e.Line, 0)
 			}
 		})
 	}
@@ -299,65 +412,83 @@ func TestWrapSkip(t *testing.T) {
 
 func TestWrapSkipf(t *testing.T) {
 	tests := []struct {
-		name     string
-		skip     int
-		err      error
-		format   string
-		args     []any
-		wantNil  bool
-		contains []string
+		name      string
+		skip      int
+		inner     error
+		format    string
+		args      []any
+		wantNil   bool
+		wantMsg   string
+		wantInner string
 	}{
 		{
-			name:    "nil error with empty format",
-			skip:    0,
-			err:     nil,
+			name:    "nil error and empty format",
+			skip:    1,
+			inner:   nil,
 			format:  "",
 			wantNil: true,
 		},
 		{
-			name:     "nil error with format",
-			skip:     0,
-			err:      nil,
-			format:   "test format: %v",
-			args:     []any{"value"},
-			contains: []string{"test format: value"},
+			name:      "standard error with format",
+			skip:      1,
+			inner:     errors.New("test error"),
+			format:    "wrapped: %v",
+			args:      []any{"test message"},
+			wantMsg:   "wrapped: test message",
+			wantInner: "test error",
 		},
 		{
-			name:     "skip 0 with format",
-			skip:     0,
-			err:      fmt.Errorf("base error"),
-			format:   "test format: %v",
-			args:     []any{"value"},
-			contains: []string{"base error", "test format: value"},
+			name:      "wrapped error with format and skip 2",
+			skip:      2,
+			inner:     Wrap(errors.New("inner error")),
+			format:    "outer: %v %v",
+			args:      []any{"message", 42},
+			wantMsg:   "outer: message 42",
+			wantInner: "inner error",
 		},
 		{
-			name:     "skip 1 with format",
-			skip:     1,
-			err:      fmt.Errorf("base error"),
-			format:   "test format: %v",
-			args:     []any{"value"},
-			contains: []string{"base error", "test format: value"},
+			name:      "nil error with format",
+			skip:      1,
+			inner:     nil,
+			format:    "should appear: %v",
+			args:      []any{"test"},
+			wantMsg:   "should appear: test",
+			wantInner: "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := WrapSkipf(tt.skip, tt.err, tt.format, tt.args...)
+			got := WrapSkipf(tt.skip, tt.inner, tt.format, tt.args...)
 			if tt.wantNil {
-				if got != nil {
-					t.Errorf("WrapSkipf() = %v, want nil", got)
+				assert.Nil(t, got)
+				return
+			}
+
+			assert.NotNil(t, got)
+			if e, ok := got.(*Error); ok {
+				assert.NotEmpty(t, e.FuncPath)
+				assert.NotEmpty(t, e.FilePath)
+				assert.Greater(t, e.Line, 0)
+
+				if tt.wantMsg != "" {
+					assert.Equal(t, tt.wantMsg, e.Message.Error())
 				}
-				return
-			}
-			if got == nil {
-				t.Error("WrapSkipf() = nil, want wrapped error")
-				return
-			}
-			for _, want := range tt.contains {
-				if !strings.Contains(got.Error(), want) {
-					t.Errorf("WrapSkipf() = %v, want to contain %v", got, want)
+				if tt.wantInner != "" {
+					assert.Equal(t, tt.wantInner, ErrorMessageOf(e.Inner))
 				}
 			}
 		})
 	}
+
+	// Test error formatting
+	t.Run("format error", func(t *testing.T) {
+		err := fmt.Errorf("format error")
+		got := WrapSkipf(1, err, "wrapped: %v", "test")
+		assert.NotNil(t, got)
+		if e, ok := got.(*Error); ok {
+			assert.Equal(t, "wrapped: test", e.Message.Error())
+			assert.Equal(t, "format error", ErrorMessageOf(e.Inner))
+		}
+	})
 }

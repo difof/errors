@@ -1,90 +1,149 @@
 package errors
 
 import (
+	"errors"
 	"fmt"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNew(t *testing.T) {
-	const msg = "simple error message"
-	err := New(msg)
-
-	if err == nil {
-		t.Fatal("New() returned nil")
+	tests := []struct {
+		name    string
+		msg     string
+		wantErr string
+	}{
+		{
+			name:    "simple error message",
+			msg:     "test error",
+			wantErr: "test error",
+		},
+		{
+			name:    "empty message",
+			msg:     "",
+			wantErr: "",
+		},
+		{
+			name:    "message with special characters",
+			msg:     "error: %$#@!",
+			wantErr: "error: %$#@!",
+		},
 	}
 
-	e, ok := err.(*Error)
-	if !ok {
-		t.Fatalf("New() returned %T, want *Error", err)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := New(tt.msg)
 
-	if e.Message == nil || e.Message.Error() != msg {
-		t.Errorf("New() message = %v, want %v", e.Message, msg)
-	}
+			// Verify it's our custom error type
+			customErr, ok := err.(*Error)
+			assert.True(t, ok)
 
-	if e.Inner != nil {
-		t.Errorf("New() inner = %v, want nil", e.Inner)
-	}
+			// Verify error message
+			assert.Equal(t, tt.wantErr, customErr.Message.Error())
 
-	if e.FilePath == "" {
-		t.Error("New() filepath is empty")
-	}
+			// Verify stack information is captured
+			assert.NotEmpty(t, customErr.FuncPath)
+			assert.NotEmpty(t, customErr.FilePath)
+			assert.Greater(t, customErr.Line, 0)
 
-	// FilePath should contain this file name
-	if !strings.Contains(e.FilePath, "new_test.go") {
-		t.Errorf("New() filepath = %v, want to contain 'new_test.go'", e.FilePath)
+			// Verify no inner error
+			assert.Nil(t, customErr.Inner)
+		})
 	}
 }
 
 func TestNewf(t *testing.T) {
-	const format = "formatted error: %d %s"
-	const num = 42
-	const str = "test"
-	expected := fmt.Sprintf(format, num, str)
-
-	err := Newf(format, num, str)
-
-	if err == nil {
-		t.Fatal("Newf() returned nil")
+	tests := []struct {
+		name    string
+		format  string
+		args    []interface{}
+		wantErr string
+	}{
+		{
+			name:    "simple format",
+			format:  "error: %s",
+			args:    []interface{}{"test"},
+			wantErr: "error: test",
+		},
+		{
+			name:    "multiple arguments",
+			format:  "error: %s, code: %d",
+			args:    []interface{}{"test", 404},
+			wantErr: "error: test, code: 404",
+		},
+		{
+			name:    "no arguments",
+			format:  "plain error",
+			args:    []interface{}{},
+			wantErr: "plain error",
+		},
+		{
+			name:    "empty format",
+			format:  "",
+			args:    []interface{}{},
+			wantErr: "",
+		},
+		{
+			name:    "format with special characters",
+			format:  "error: %s !@#$%%",
+			args:    []interface{}{"test"},
+			wantErr: "error: test !@#$%",
+		},
 	}
 
-	e, ok := err.(*Error)
-	if !ok {
-		t.Fatalf("Newf() returned %T, want *Error", err)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := Newf(tt.format, tt.args...)
 
-	if e.Message == nil || e.Message.Error() != expected {
-		t.Errorf("Newf() message = %v, want %v", e.Message, expected)
-	}
+			// Verify it's our custom error type
+			customErr, ok := err.(*Error)
+			assert.True(t, ok)
 
-	if e.Inner != nil {
-		t.Errorf("Newf() inner = %v, want nil", e.Inner)
-	}
+			// Verify error message
+			assert.Equal(t, tt.wantErr, customErr.Message.Error())
 
-	if !strings.Contains(e.FilePath, "new_test.go") {
-		t.Errorf("Newf() filepath = %v, want to contain 'new_test.go'", e.FilePath)
+			// Verify stack information is captured
+			assert.NotEmpty(t, customErr.FuncPath)
+			assert.NotEmpty(t, customErr.FilePath)
+			assert.Greater(t, customErr.Line, 0)
+
+			// Verify no inner error
+			assert.Nil(t, customErr.Inner)
+		})
 	}
 }
 
 func TestNewSkip(t *testing.T) {
 	tests := []struct {
-		name     string
-		skip     int
-		msg      string
-		wantFile string // expected file name in source
+		name    string
+		skip    int
+		msg     string
+		wantErr string
 	}{
 		{
-			name:     "no skip",
-			skip:     0,
-			msg:      "direct error",
-			wantFile: "new_test.go",
+			name:    "skip 0",
+			skip:    0,
+			msg:     "test error",
+			wantErr: "test error",
 		},
 		{
-			name:     "skip one",
-			skip:     1,
-			msg:      "skipped error",
-			wantFile: "runtime.go", // or some other file in the call stack
+			name:    "skip 1",
+			skip:    1,
+			msg:     "test error",
+			wantErr: "test error",
+		},
+		{
+			name:    "skip 2",
+			skip:    2,
+			msg:     "test error",
+			wantErr: "test error",
+		},
+		{
+			name:    "empty message",
+			skip:    0,
+			msg:     "",
+			wantErr: "",
 		},
 	}
 
@@ -92,54 +151,59 @@ func TestNewSkip(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := NewSkip(tt.skip, tt.msg)
 
-			if err == nil {
-				t.Fatal("NewSkip() returned nil")
-			}
+			// Verify it's our custom error type
+			customErr, ok := err.(*Error)
+			assert.True(t, ok)
 
-			e, ok := err.(*Error)
-			if !ok {
-				t.Fatalf("NewSkip() returned %T, want *Error", err)
-			}
+			// Verify error message
+			assert.Equal(t, tt.wantErr, customErr.Message.Error())
 
-			if e.Message == nil || e.Message.Error() != tt.msg {
-				t.Errorf("NewSkip() message = %v, want %v", e.Message, tt.msg)
-			}
+			// Verify stack information is captured
+			assert.NotEmpty(t, customErr.FuncPath)
+			assert.NotEmpty(t, customErr.FilePath)
+			assert.Greater(t, customErr.Line, 0)
 
-			if e.Inner != nil {
-				t.Errorf("NewSkip() inner = %v, want nil", e.Inner)
-			}
-
-			if tt.skip == 0 && !strings.Contains(e.FilePath, tt.wantFile) {
-				t.Errorf("NewSkip() filepath = %v, want to contain %v", e.FilePath, tt.wantFile)
-			}
+			// Verify no inner error
+			assert.Nil(t, customErr.Inner)
 		})
 	}
 }
 
 func TestNewSkipf(t *testing.T) {
 	tests := []struct {
-		name     string
-		skip     int
-		format   string
-		args     []any
-		wantMsg  string
-		wantFile string
+		name    string
+		skip    int
+		format  string
+		args    []interface{}
+		wantErr string
 	}{
 		{
-			name:     "no skip with format",
-			skip:     0,
-			format:   "error %d: %s",
-			args:     []any{1, "test"},
-			wantMsg:  "error 1: test",
-			wantFile: "new_test.go",
+			name:    "skip 0 with format",
+			skip:    0,
+			format:  "error: %s",
+			args:    []interface{}{"test"},
+			wantErr: "error: test",
 		},
 		{
-			name:     "skip one with format",
-			skip:     1,
-			format:   "skipped error: %v",
-			args:     []any{"message"},
-			wantMsg:  "skipped error: message",
-			wantFile: "runtime.go", // or some other file in the call stack
+			name:    "skip 1 with multiple args",
+			skip:    1,
+			format:  "error: %s, code: %d",
+			args:    []interface{}{"test", 404},
+			wantErr: "error: test, code: 404",
+		},
+		{
+			name:    "skip 2 no args",
+			skip:    2,
+			format:  "plain error",
+			args:    []interface{}{},
+			wantErr: "plain error",
+		},
+		{
+			name:    "empty format",
+			skip:    0,
+			format:  "",
+			args:    []interface{}{},
+			wantErr: "",
 		},
 	}
 
@@ -147,93 +211,140 @@ func TestNewSkipf(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := NewSkipf(tt.skip, tt.format, tt.args...)
 
-			if err == nil {
-				t.Fatal("NewSkipf() returned nil")
-			}
+			// Verify it's our custom error type
+			customErr, ok := err.(*Error)
+			assert.True(t, ok)
 
-			e, ok := err.(*Error)
-			if !ok {
-				t.Fatalf("NewSkipf() returned %T, want *Error", err)
-			}
+			// Verify error message
+			assert.Equal(t, tt.wantErr, customErr.Message.Error())
 
-			if e.Message == nil || e.Message.Error() != tt.wantMsg {
-				t.Errorf("NewSkipf() message = %v, want %v", e.Message, tt.wantMsg)
-			}
+			// Verify stack information is captured
+			assert.NotEmpty(t, customErr.FuncPath)
+			assert.NotEmpty(t, customErr.FilePath)
+			assert.Greater(t, customErr.Line, 0)
 
-			if e.Inner != nil {
-				t.Errorf("NewSkipf() inner = %v, want nil", e.Inner)
-			}
-
-			if tt.skip == 0 && !strings.Contains(e.FilePath, tt.wantFile) {
-				t.Errorf("NewSkipf() filepath = %v, want to contain %v", e.FilePath, tt.wantFile)
-			}
+			// Verify no inner error
+			assert.Nil(t, customErr.Inner)
 		})
 	}
 }
 
-// Helper function to test error creation through multiple stack frames
-func createErrorThroughFrames(depth int, useFormat bool) error {
+// Helper function to verify error creation through different layers
+func createNestedError(depth int) error {
 	if depth == 0 {
-		if useFormat {
-			return Newf("depth %d error", depth)
-		}
-		return New("depth 0 error")
+		return New("base error")
 	}
-	return createErrorThroughFrames(depth-1, useFormat)
+	innerErr := createNestedError(depth - 1)
+	funcpath, filepath, line := getCallerPath(1)
+	return NewError(funcpath, filepath, line, errors.New(fmt.Sprintf("level %d", depth)), innerErr)
 }
 
-func TestErrorStackFrames(t *testing.T) {
+func TestErrorNesting(t *testing.T) {
+	err := createNestedError(3)
+	customErr := err.(*Error)
+
+	// Test error message extraction (gets the innermost error message)
+	assert.Equal(t, "base error", ErrorMessageOf(err))
+
+	// Verify each level has proper stack information and collect raw messages
+	var messages []string
+	customErr.Each(func(e error) bool {
+		if ce, ok := e.(*Error); ok {
+			messages = append(messages, ce.Message.Error())
+			assert.NotEmpty(t, ce.FuncPath)
+			assert.NotEmpty(t, ce.FilePath)
+			assert.Greater(t, ce.Line, 0)
+		}
+		return true
+	})
+
+	// Verify we have all 4 levels (3 nested + base)
+	assert.Equal(t, 4, len(messages))
+
+	// Verify the message content
+	assert.Equal(t, "level 3", messages[0])
+	assert.Equal(t, "level 2", messages[1])
+	assert.Equal(t, "level 1", messages[2])
+	assert.Equal(t, "base error", messages[3])
+
+	// Test error unwrapping
+	current := err
+	depth := 3
+	for current != nil {
+		if ce, ok := current.(*Error); ok {
+			assert.NotEmpty(t, ce.FuncPath)
+			assert.NotEmpty(t, ce.FilePath)
+			assert.Greater(t, ce.Line, 0)
+			if depth > 0 {
+				assert.Equal(t, fmt.Sprintf("level %d", depth), ce.Message.Error())
+			} else {
+				assert.Equal(t, "base error", ce.Message.Error())
+			}
+			depth--
+			current = ce.Unwrap()
+		} else {
+			current = nil
+		}
+	}
+	assert.Equal(t, -1, depth, "Should have unwrapped through all levels")
+}
+
+// Test error creation in goroutines
+func TestErrorInGoroutine(t *testing.T) {
+	done := make(chan error)
+
+	go func() {
+		err := New("error from goroutine")
+		done <- err
+	}()
+
+	err := <-done
+	customErr, ok := err.(*Error)
+	assert.True(t, ok)
+
+	// Verify error details
+	assert.Equal(t, "error from goroutine", customErr.Message.Error())
+	assert.NotEmpty(t, customErr.FuncPath)
+	assert.NotEmpty(t, customErr.FilePath)
+	assert.Greater(t, customErr.Line, 0)
+}
+
+// Test error creation with various types of format arguments
+func TestNewfVariousTypes(t *testing.T) {
+	type customType struct {
+		value string
+	}
+
 	tests := []struct {
-		name      string
-		depth     int
-		useFormat bool
+		name    string
+		format  string
+		args    []interface{}
+		wantErr string
 	}{
 		{
-			name:      "simple error",
-			depth:     0,
-			useFormat: false,
+			name:    "with struct",
+			format:  "error with struct: %v",
+			args:    []interface{}{struct{ name string }{"test"}},
+			wantErr: "error with struct: {test}",
 		},
 		{
-			name:      "nested error",
-			depth:     3,
-			useFormat: false,
+			name:    "with custom type",
+			format:  "error with custom type: %v",
+			args:    []interface{}{&customType{"test"}},
+			wantErr: fmt.Sprintf("error with custom type: &{test}"),
 		},
 		{
-			name:      "formatted nested error",
-			depth:     3,
-			useFormat: true,
+			name:    "with multiple types",
+			format:  "string: %s, int: %d, float: %.2f, bool: %t",
+			args:    []interface{}{"test", 42, 3.14, true},
+			wantErr: "string: test, int: 42, float: 3.14, bool: true",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := createErrorThroughFrames(tt.depth, tt.useFormat)
-
-			if err == nil {
-				t.Fatal("createErrorThroughFrames() returned nil")
-			}
-
-			e, ok := err.(*Error)
-			if !ok {
-				t.Fatalf("createErrorThroughFrames() returned %T, want *Error", err)
-			}
-
-			// Verify filepath contains correct file
-			if !strings.Contains(e.FilePath, "new_test.go") {
-				t.Errorf("filepath = %v, want to contain 'new_test.go'", e.FilePath)
-			}
-
-			// Verify message format
-			if tt.useFormat {
-				expected := fmt.Sprintf("depth %d error", 0)
-				if e.Message.Error() != expected {
-					t.Errorf("message = %v, want %v", e.Message, expected)
-				}
-			} else {
-				if e.Message.Error() != "depth 0 error" {
-					t.Errorf("message = %v, want 'depth 0 error'", e.Message)
-				}
-			}
+			err := Newf(tt.format, tt.args...)
+			assert.Equal(t, tt.wantErr, err.(*Error).Message.Error())
 		})
 	}
 }

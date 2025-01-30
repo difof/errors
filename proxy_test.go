@@ -1,38 +1,90 @@
 package errors
 
 import (
-	"fmt"
 	"testing"
+
+	goerrors "errors"
+
+	"github.com/stretchr/testify/assert"
 )
 
-// proxyTestError is a custom error type that implements error interface
-type proxyTestError struct {
-	msg string
-}
+// Custom error types for testing
+type proxyCustomError struct{ msg string }
 
-func (e *proxyTestError) Error() string { return e.msg }
+func (e *proxyCustomError) Error() string { return e.msg }
 
-// proxyWrappedError is a custom error type that implements error interface and wraps another error
 type proxyWrappedError struct {
-	msg   string
-	inner error
+	err error
+	msg string
 }
 
 func (e *proxyWrappedError) Error() string { return e.msg }
-func (e *proxyWrappedError) Unwrap() error { return e.inner }
+func (e *proxyWrappedError) Unwrap() error { return e.err }
 
-// proxyTargetError is a custom error type used for testing error type assertions
-type proxyTargetError struct {
-	msg string
+func TestAs(t *testing.T) {
+	tests := []struct {
+		name    string
+		err     error
+		target  interface{}
+		want    bool
+		wantVal interface{}
+	}{
+		{
+			name:    "nil error",
+			err:     nil,
+			target:  new(*proxyCustomError),
+			want:    false,
+			wantVal: (*proxyCustomError)(nil),
+		},
+		{
+			name:    "direct match",
+			err:     &proxyCustomError{"direct"},
+			target:  new(*proxyCustomError),
+			want:    true,
+			wantVal: &proxyCustomError{"direct"},
+		},
+		{
+			name:    "wrapped standard error",
+			err:     &proxyWrappedError{&proxyCustomError{"wrapped"}, "outer"},
+			target:  new(*proxyCustomError),
+			want:    true,
+			wantVal: &proxyCustomError{"wrapped"},
+		},
+		{
+			name:    "custom Error type with inner proxyCustomError",
+			err:     NewError("test.func", "test.go", 1, goerrors.New("outer"), &proxyCustomError{"inner"}),
+			target:  new(*proxyCustomError),
+			want:    true,
+			wantVal: &proxyCustomError{"inner"},
+		},
+		{
+			name:    "no match",
+			err:     goerrors.New("test"),
+			target:  new(*proxyCustomError),
+			want:    false,
+			wantVal: (*proxyCustomError)(nil),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := As(tt.err, tt.target)
+			assert.Equal(t, tt.want, got)
+			if ptr, ok := tt.target.(*(*proxyCustomError)); ok && ptr != nil {
+				if *ptr == nil {
+					assert.Equal(t, tt.wantVal, *ptr)
+				} else {
+					assert.Equal(t, tt.wantVal.(*proxyCustomError).msg, (*ptr).msg)
+				}
+			}
+		})
+	}
 }
 
-func (e *proxyTargetError) Error() string { return e.msg }
-
 func TestIs(t *testing.T) {
-	baseErr := &proxyTestError{msg: "base error"}
-	wrappedErr := &proxyWrappedError{msg: "wrapped error", inner: baseErr}
-	doubleWrappedErr := fmt.Errorf("outer: %w", wrappedErr)
-	unrelatedErr := &proxyTestError{msg: "unrelated error"}
+	baseErr := goerrors.New("base error")
+	customErr := &proxyCustomError{"custom"}
+	wrappedErr := &proxyWrappedError{baseErr, "wrapped"}
 
 	tests := []struct {
 		name   string
@@ -41,10 +93,16 @@ func TestIs(t *testing.T) {
 		want   bool
 	}{
 		{
-			name:   "nil errors",
+			name:   "nil error",
 			err:    nil,
+			target: baseErr,
+			want:   false,
+		},
+		{
+			name:   "nil target",
+			err:    baseErr,
 			target: nil,
-			want:   true,
+			want:   false,
 		},
 		{
 			name:   "direct match",
@@ -59,137 +117,77 @@ func TestIs(t *testing.T) {
 			want:   true,
 		},
 		{
-			name:   "double wrapped error match",
-			err:    doubleWrappedErr,
+			name:   "custom Error type with matching inner",
+			err:    NewError("test.func", "test.go", 1, goerrors.New("outer"), baseErr),
 			target: baseErr,
 			want:   true,
 		},
 		{
 			name:   "no match",
 			err:    baseErr,
-			target: unrelatedErr,
+			target: customErr,
 			want:   false,
 		},
 		{
-			name:   "nil error no match",
-			err:    nil,
+			name:   "custom Error type no match",
+			err:    NewError("test.func", "test.go", 1, goerrors.New("outer"), customErr),
 			target: baseErr,
 			want:   false,
 		},
-		{
-			name:   "error with nil target",
-			err:    baseErr,
-			target: nil,
-			want:   false,
-		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := Is(tt.err, tt.target); got != tt.want {
-				t.Errorf("Is() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestAs(t *testing.T) {
-	baseErr := &proxyTargetError{msg: "target error"}
-	wrappedErr := &proxyWrappedError{msg: "wrapped error", inner: baseErr}
-	doubleWrappedErr := fmt.Errorf("outer: %w", wrappedErr)
-	unrelatedErr := &proxyTestError{msg: "unrelated error"}
-
-	tests := []struct {
-		name    string
-		err     error
-		wantErr bool
-	}{
-		{
-			name:    "direct match",
-			err:     baseErr,
-			wantErr: true,
-		},
-		{
-			name:    "wrapped error match",
-			err:     wrappedErr,
-			wantErr: true,
-		},
-		{
-			name:    "double wrapped error match",
-			err:     doubleWrappedErr,
-			wantErr: true,
-		},
-		{
-			name:    "no match",
-			err:     unrelatedErr,
-			wantErr: false,
-		},
-		{
-			name:    "nil error",
-			err:     nil,
-			wantErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var target *proxyTargetError
-			got := As(tt.err, &target)
-			if got != tt.wantErr {
-				t.Errorf("As() = %v, want %v", got, tt.wantErr)
-			}
-			if got && target == nil {
-				t.Error("As() succeeded but target is nil")
-			}
+			got := Is(tt.err, tt.target)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
 func TestUnwrap(t *testing.T) {
-	innerErr := fmt.Errorf("inner error")
-	wrappedErr := &proxyWrappedError{msg: "wrapped error", inner: innerErr}
-	doubleWrappedErr := fmt.Errorf("outer: %w", wrappedErr)
-	nonWrappingErr := &proxyTestError{msg: "non-wrapping error"}
+	baseErr := goerrors.New("base error")
+	wrappedErr := &proxyWrappedError{baseErr, "wrapped"}
+	customErr := NewError("test.func", "test.go", 1, goerrors.New("outer"), baseErr)
 
 	tests := []struct {
-		name    string
-		err     error
-		wantErr error
-		wantNil bool
+		name string
+		err  error
+		want error
 	}{
 		{
-			name:    "unwrap wrapped error",
-			err:     wrappedErr,
-			wantErr: innerErr,
+			name: "nil error",
+			err:  nil,
+			want: nil,
 		},
 		{
-			name:    "unwrap double wrapped error",
-			err:     doubleWrappedErr,
-			wantErr: wrappedErr,
+			name: "error without Unwrap method",
+			err:  baseErr,
+			want: nil,
 		},
 		{
-			name:    "unwrap non-wrapping error",
-			err:     nonWrappingErr,
-			wantNil: true,
+			name: "wrapped error",
+			err:  wrappedErr,
+			want: baseErr,
 		},
 		{
-			name:    "unwrap nil error",
-			err:     nil,
-			wantNil: true,
+			name: "custom Error type",
+			err:  customErr,
+			want: baseErr,
+		},
+		{
+			name: "multiple wraps",
+			err:  &proxyWrappedError{wrappedErr, "double wrapped"},
+			want: wrappedErr,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := Unwrap(tt.err)
-			if tt.wantNil {
-				if got != nil {
-					t.Errorf("Unwrap() = %v, want nil", got)
-				}
-				return
-			}
-			if got != tt.wantErr {
-				t.Errorf("Unwrap() = %v, want %v", got, tt.wantErr)
+			if got != nil {
+				assert.Equal(t, tt.want.Error(), got.Error())
+			} else {
+				assert.Equal(t, tt.want, got)
 			}
 		})
 	}

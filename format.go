@@ -68,6 +68,61 @@ func (f *textFormatter) createStackEntry(err *Error) string {
 	return b.String()
 }
 
+// ColorConfig configures the colored formatter
+type ColorConfig struct {
+	// SourceColor is the color for source locations
+	SourceColor *color.Color
+	// MessageColor is the color for error messages
+	MessageColor *color.Color
+	// InnerColor is the color for inner errors
+	InnerColor *color.Color
+}
+
+// coloredFormatter formats errors with colors for terminal output
+type coloredFormatter struct {
+	config ColorConfig
+}
+
+func (f *coloredFormatter) FormatError(err *Error) string {
+	entries := err.ExtractEntries()
+
+	// Reverse to show root cause first
+	for i := 0; i < len(entries)/2; i++ {
+		j := len(entries) - 1 - i
+		entries[i], entries[j] = entries[j], entries[i]
+	}
+
+	// Build colored output
+	var b strings.Builder
+	for i, err := range entries {
+		if i > 0 {
+			b.WriteString("\n  ")
+		}
+		b.WriteString(f.createStackEntry(&err))
+	}
+
+	return b.String()
+}
+
+func (f *coloredFormatter) createStackEntry(err *Error) string {
+	var b strings.Builder
+	b.WriteString("at ")
+
+	if err.FuncPath != "" {
+		b.WriteString(f.config.InnerColor.Sprint(err.FuncPath))
+		b.WriteString(" ")
+	}
+
+	b.WriteString(f.config.SourceColor.Sprint(err.FilePath))
+
+	if err.MessageString != "" {
+		b.WriteString(": ")
+		b.WriteString(f.config.MessageColor.Sprint(err.MessageString))
+	}
+
+	return b.String()
+}
+
 // JSONConfig configures the JSON formatter
 type JSONConfig struct {
 	// Indent is the indentation string used for pretty printing
@@ -118,61 +173,6 @@ func (f *yamlFormatter) FormatError(err *Error) string {
 	data, _ := yaml.Marshal(entries)
 
 	return string(data)
-}
-
-// ColorConfig configures the colored formatter
-type ColorConfig struct {
-	// SourceColor is the color for source locations
-	SourceColor *color.Color
-	// MessageColor is the color for error messages
-	MessageColor *color.Color
-	// InnerColor is the color for inner errors
-	InnerColor *color.Color
-}
-
-// coloredFormatter formats errors with colors for terminal output
-type coloredFormatter struct {
-	config ColorConfig
-}
-
-func (f *coloredFormatter) FormatError(err *Error) string {
-	entries := err.ExtractEntries()
-
-	// Reverse to show root cause first
-	for i := 0; i < len(entries)/2; i++ {
-		j := len(entries) - 1 - i
-		entries[i], entries[j] = entries[j], entries[i]
-	}
-
-	// Build colored output
-	var b strings.Builder
-	for i, err := range entries {
-		if i > 0 {
-			b.WriteString("\n  ")
-		}
-		b.WriteString(f.createStackEntry(&err))
-	}
-
-	return b.String()
-}
-
-func (f *coloredFormatter) createStackEntry(err *Error) string {
-	var b strings.Builder
-	b.WriteString("at ")
-
-	if err.FuncPath != "" {
-		b.WriteString(f.config.InnerColor.Sprint(err.FuncPath))
-		b.WriteString(" ")
-	}
-
-	b.WriteString(f.config.SourceColor.Sprint(err.FilePath))
-
-	if err.Message != nil {
-		b.WriteString(": ")
-		b.WriteString(f.config.MessageColor.Sprint(err.Message.Error()))
-	}
-
-	return b.String()
 }
 
 var (

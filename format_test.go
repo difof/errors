@@ -460,3 +460,57 @@ func stripColors(s string) string {
 	}
 	return b.String()
 }
+
+func TestFormatterConsistency(t *testing.T) {
+	tests := []struct {
+		name      string
+		formatter Formatter
+		validate  func(t *testing.T, output string)
+	}{
+		{
+			name:      "JSON validity",
+			formatter: JSONFormatter(DefaultJSONConfig()),
+			validate: func(t *testing.T, output string) {
+				var parsed interface{}
+				assert.NoError(t, json.Unmarshal([]byte(output), &parsed), "Output should be valid JSON")
+			},
+		},
+		{
+			name:      "YAML validity",
+			formatter: YAMLFormatter(DefaultYAMLConfig()),
+			validate: func(t *testing.T, output string) {
+				var parsed interface{}
+				assert.NoError(t, yaml.Unmarshal([]byte(output), &parsed), "Output should be valid YAML")
+			},
+		},
+		{
+			name:      "Text structure",
+			formatter: TextFormatter(DefaultTextConfig()),
+			validate: func(t *testing.T, output string) {
+				// Verify each line matches the expected pattern
+				lines := strings.Split(output, "\n")
+				for _, line := range lines {
+					if line != "" {
+						assert.Regexp(t, `^[ ]*at .+:\d+`, line, "Text format should match expected pattern")
+					}
+				}
+			},
+		},
+	}
+
+	err := NewError("pkg.func", "file.go", 42,
+		errors.New("root error"),
+		NewError("pkg.inner", "inner.go", 24, errors.New("inner error"), nil),
+	)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output := tt.formatter.FormatError(err)
+			tt.validate(t, output)
+
+			// Test idempotency - formatting same error twice should produce same output
+			output2 := tt.formatter.FormatError(err)
+			assert.Equal(t, output, output2, "Formatter should produce identical output for same input")
+		})
+	}
+}

@@ -44,7 +44,7 @@ func (f *textFormatter) FormatError(err *Error) string {
 	return b.String()
 }
 
-func (f *textFormatter) createStackEntry(err *Error) string {
+func (f *textFormatter) createStackEntry(err *ErrorEntry) string {
 	var b strings.Builder
 
 	hasDetails := err.FuncPath != "" && err.FilePath != NO_SOURCE && err.Line != 0
@@ -63,14 +63,14 @@ func (f *textFormatter) createStackEntry(err *Error) string {
 		b.WriteString(strconv.Itoa(err.Line))
 	}
 
-	if err.Message != nil {
+	if err.Message != "" {
 		if hasDetails {
 			b.WriteString(": ")
 		} else {
 			b.WriteString("caught error: ")
 		}
 
-		b.WriteString(err.MessageString)
+		b.WriteString(err.Message)
 	}
 
 	return b.String()
@@ -112,7 +112,7 @@ func (f *coloredFormatter) FormatError(err *Error) string {
 	return b.String()
 }
 
-func (f *coloredFormatter) createStackEntry(err *Error) string {
+func (f *coloredFormatter) createStackEntry(err *ErrorEntry) string {
 	var b strings.Builder
 
 	hasDetails := err.FuncPath != "" && err.FilePath != NO_SOURCE && err.Line != 0
@@ -131,13 +131,13 @@ func (f *coloredFormatter) createStackEntry(err *Error) string {
 		b.WriteString(strconv.Itoa(err.Line))
 	}
 
-	if err.MessageString != "" {
+	if err.Message != "" {
 		if hasDetails {
 			b.WriteString(": ")
 		} else {
 			b.WriteString(f.config.InnerColor.Sprint("caught error: "))
 		}
-		b.WriteString(f.config.MessageColor.Sprint(err.MessageString))
+		b.WriteString(f.config.MessageColor.Sprint(err.Message))
 	}
 
 	return b.String()

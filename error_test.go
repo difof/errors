@@ -136,10 +136,10 @@ func TestError_ExtractEntries(t *testing.T) {
 			err:     NewError("pkg.func", "file.go", 42, errors.New("test error"), nil),
 			wantLen: 1,
 			wantLast: Error{
-				FuncPath:      "pkg.func",
-				FilePath:      "file.go",
-				Line:          42,
-				MessageString: "test error",
+				FuncPath: "pkg.func",
+				FilePath: "file.go",
+				Line:     42,
+				Message:  errors.New("test error"),
 			},
 		},
 		{
@@ -150,10 +150,10 @@ func TestError_ExtractEntries(t *testing.T) {
 			),
 			wantLen: 2,
 			wantLast: Error{
-				FuncPath:      "pkg.func2",
-				FilePath:      "file2.go",
-				Line:          24,
-				MessageString: "error2",
+				FuncPath: "pkg.func2",
+				FilePath: "file2.go",
+				Line:     24,
+				Message:  errors.New("error2"),
 			},
 		},
 	}
@@ -165,7 +165,7 @@ func TestError_ExtractEntries(t *testing.T) {
 			assert.Equal(t, tt.wantLast.FuncPath, entries[len(entries)-1].FuncPath)
 			assert.Equal(t, tt.wantLast.FilePath, entries[len(entries)-1].FilePath)
 			assert.Equal(t, tt.wantLast.Line, entries[len(entries)-1].Line)
-			assert.Equal(t, tt.wantLast.MessageString, entries[len(entries)-1].MessageString)
+			assert.Equal(t, tt.wantLast.Message.Error(), entries[len(entries)-1].Message)
 		})
 	}
 }
@@ -407,17 +407,17 @@ func TestError_DeepStdError(t *testing.T) {
 	assert.Equal(t, "pkg.level1", entries[0].FuncPath)
 	assert.Equal(t, "level1.go", entries[0].FilePath)
 	assert.Equal(t, 10, entries[0].Line)
-	assert.Equal(t, "level 1 error", entries[0].MessageString)
+	assert.Equal(t, "level 1 error", entries[0].Message)
 
 	assert.Equal(t, "pkg.level2", entries[1].FuncPath)
 	assert.Equal(t, "level2.go", entries[1].FilePath)
 	assert.Equal(t, 20, entries[1].Line)
-	assert.Equal(t, "level 2 error", entries[1].MessageString)
+	assert.Equal(t, "level 2 error", entries[1].Message)
 
 	assert.Equal(t, "pkg.level3", entries[2].FuncPath)
 	assert.Equal(t, "level3.go", entries[2].FilePath)
 	assert.Equal(t, 30, entries[2].Line)
-	assert.Equal(t, "level 3 error", entries[2].MessageString)
+	assert.Equal(t, "level 3 error", entries[2].Message)
 
 	// Test error string contains all levels
 	errStr := level1.Error()

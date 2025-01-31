@@ -382,7 +382,7 @@ func TestYAMLFormatter(t *testing.T) {
 		got := formatter.FormatError(err)
 		lines := strings.Split(got, "\n")
 		assert.True(t, len(lines) > 0)
-		assert.Contains(t, lines[0], "filepath:")
+		assert.Contains(t, lines[2], "filepath:")
 
 		// Verify order of errors (should be reversed)
 		var funcpaths []string

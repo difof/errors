@@ -10,15 +10,14 @@ import (
 //   - FilePath: The file path where the error occurred (file:line)
 //   - FuncPath: The function path where the error occurred (package.function)
 //   - Line: The line number where the error occurred
-//   - Message: The actual error message
+//   - Message: The actual error
 //   - Inner: The wrapped/underlying error for error chaining
 type Error struct {
-	FilePath      string `json:"filepath,omitempty" yaml:"filepath,omitempty"`
-	FuncPath      string `json:"funcpath,omitempty" yaml:"funcpath,omitempty"`
-	Line          int    `json:"line,omitempty" yaml:"line,omitempty"`
-	MessageString string `json:"message,omitempty" yaml:"message,omitempty"`
-	Message       error  `json:"-" yaml:"-"`
-	Inner         error  `json:"-" yaml:"-"`
+	FilePath string
+	FuncPath string
+	Line     int
+	Message  error
+	Inner    error
 }
 
 // NewError creates a new Error instance with the given source location, message, and inner error.
@@ -56,22 +55,34 @@ func ErrorMessageOf(err error) string {
 	return err.Error()
 }
 
-func (e *Error) ExtractEntries() []Error {
-	var entries []Error
+type ErrorEntry struct {
+	Message  string `json:"message,omitempty" yaml:"message,omitempty"`
+	FuncPath string `json:"funcpath,omitempty" yaml:"funcpath,omitempty"`
+	FilePath string `json:"filepath,omitempty" yaml:"filepath,omitempty"`
+	Line     int    `json:"line,omitempty" yaml:"line,omitempty"`
+}
+
+func (e *Error) ExtractEntries() []ErrorEntry {
+	var entries []ErrorEntry
 
 	e.Each(func(err error) bool {
 		var e *Error
 		if As(err, &e) {
-			if e.Message != nil {
-				e.MessageString = e.Message.Error()
+			entry := ErrorEntry{
+				FilePath: e.FilePath,
+				FuncPath: e.FuncPath,
+				Line:     e.Line,
 			}
 
-			entries = append(entries, *e)
+			if e.Message != nil {
+				entry.Message = e.Message.Error()
+			}
+
+			entries = append(entries, entry)
 		} else {
-			entries = append(entries, Error{
-				FilePath:      NO_SOURCE,
-				MessageString: err.Error(),
-				Message:       err,
+			entries = append(entries, ErrorEntry{
+				FilePath: NO_SOURCE,
+				Message:  err.Error(),
 			})
 		}
 

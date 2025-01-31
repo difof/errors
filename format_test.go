@@ -257,6 +257,33 @@ func TestJSONFormatter(t *testing.T) {
 		assert.Contains(t, foundLines[1], "pkg.func2")
 		assert.Contains(t, foundLines[2], "pkg.func1")
 	})
+
+	// Test no indent (compact JSON)
+	t.Run("no indent", func(t *testing.T) {
+		config := JSONConfig{
+			Indent: "",
+			Prefix: "",
+		}
+		formatter := JSONFormatter(config)
+		err := NewError("pkg.func", "file.go", 42, errors.New("test error"), nil)
+		got := formatter.FormatError(err)
+
+		// Verify it's valid JSON
+		var parsed []map[string]interface{}
+		err2 := json.Unmarshal([]byte(got), &parsed)
+		assert.NoError(t, err2)
+
+		// Verify it's compact (no newlines or extra spaces)
+		assert.NotContains(t, got, "\n")
+		assert.NotContains(t, got, "  ")
+
+		// Verify content
+		assert.Equal(t, 1, len(parsed))
+		assert.Equal(t, "pkg.func", parsed[0]["funcpath"])
+		assert.Equal(t, "file.go", parsed[0]["filepath"])
+		assert.Equal(t, float64(42), parsed[0]["line"])
+		assert.Equal(t, "test error", parsed[0]["message"])
+	})
 }
 
 func TestYAMLFormatter(t *testing.T) {

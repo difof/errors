@@ -165,7 +165,12 @@ func (f *jsonFormatter) FormatError(err *Error) string {
 		entries[i], entries[j] = entries[j], entries[i]
 	}
 
-	data, _ := json.MarshalIndent(entries, f.config.Prefix, f.config.Indent)
+	var data []byte
+	if f.config.Indent == "" {
+		data, _ = json.Marshal(entries)
+	} else {
+		data, _ = json.MarshalIndent(entries, f.config.Prefix, f.config.Indent)
+	}
 
 	return string(data)
 }

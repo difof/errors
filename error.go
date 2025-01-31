@@ -38,23 +38,6 @@ func NewError(funcpath string, filepath string, line int, message, inner error) 
 	}
 }
 
-// ErrorMessageOf returns the innermost error message of the error chain.
-//
-// If the error is an *Error type, it traverses the chain to get the root message.
-// For other error types, it returns the standard error message.
-func ErrorMessageOf(err error) string {
-	if err == nil {
-		return ""
-	}
-
-	var e *Error
-	if As(err, &e) {
-		return e.ErrorMessage()
-	}
-
-	return err.Error()
-}
-
 type ErrorEntry struct {
 	Message  string `json:"message,omitempty" yaml:"message,omitempty"`
 	FuncPath string `json:"func_path,omitempty" yaml:"func_path,omitempty"`
@@ -107,19 +90,43 @@ func (e *Error) Each(it func(err error) bool) {
 		return
 	}
 
-	var current error = e
-	for current != nil {
+	for current := error(e); current != nil; current = goerrors.Unwrap(current) {
 		if !it(current) {
 			break
 		}
+	}
+}
 
-		var cast *Error
-		if As(current, &cast) {
-			current = cast.Unwrap()
+// Len returns the number of errors in the chain.
+func (e *Error) Len() (count int) {
+	current := error(e)
+	for current != nil {
+		count++
+		if ec, ok := current.(*Error); ok {
+			current = ec.Inner
 		} else {
 			break
 		}
 	}
+
+	return
+}
+
+// ErrorMessageOf returns the innermost error message of an error.
+//
+// If the error is an *Error type, it traverses the chain to get the root message.
+// For other error types, it returns the standard error message.
+func ErrorMessageOf(err error) string {
+	if err == nil {
+		return ""
+	}
+
+	var e *Error
+	if As(err, &e) {
+		return e.ErrorMessage()
+	}
+
+	return err.Error()
 }
 
 // ErrorMessage returns the innermost error message without source location

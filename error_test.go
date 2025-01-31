@@ -449,3 +449,62 @@ func TestError_DeepStdError(t *testing.T) {
 	// Test Is works with root cause
 	assert.True(t, errors.Is(level1, rootCause))
 }
+
+func TestError_Len(t *testing.T) {
+	tests := []struct {
+		name string
+		err  *Error
+		want int
+	}{
+		{
+			name: "nil error",
+			err:  nil,
+			want: 0,
+		},
+		{
+			name: "single error without inner",
+			err:  NewError("pkg.func", "file.go", 42, errors.New("test error"), nil),
+			want: 1,
+		},
+		{
+			name: "error with standard error as inner",
+			err:  NewError("pkg.func", "file.go", 42, errors.New("outer error"), errors.New("inner error")),
+			want: 2,
+		},
+		{
+			name: "chain of custom errors",
+			err: NewError("pkg.func1", "file1.go", 42,
+				errors.New("error1"),
+				NewError("pkg.func2", "file2.go", 24,
+					errors.New("error2"),
+					NewError("pkg.func3", "file3.go", 10,
+						errors.New("error3"),
+						nil,
+					),
+				),
+			),
+			want: 3,
+		},
+		{
+			name: "mixed chain with standard and custom errors",
+			err: NewError("pkg.func1", "file1.go", 42,
+				errors.New("error1"),
+				NewError("pkg.func2", "file2.go", 24,
+					errors.New("error2"),
+					errors.New("standard error"),
+				),
+			),
+			want: 3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := 0
+			if tt.err != nil {
+				got = tt.err.Len()
+			}
+			assert.Equal(t, tt.want, got, "Error.Len() returned unexpected count")
+		})
+	}
+}

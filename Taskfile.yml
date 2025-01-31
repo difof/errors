@@ -58,7 +58,7 @@ tasks:
     desc: Run all tests verbosely
     silent: true
     deps: [check-gotestsum, check-gocov]
-    cmd: gotestsum --format testname --hide-summary=output -- -timeout {{.TEST_TIMEOUT}} -count=1 -coverprofile={{.COVERAGE_FILE}} {{.PACKAGE_NAME}} {{.CLI_ARGS}}
+    cmd: gotestsum --format standard-quiet -- -timeout {{.TEST_TIMEOUT}} -count=1 -coverprofile={{.COVERAGE_FILE}} {{.PACKAGE_NAME}} {{.CLI_ARGS}}
 
   test:file:
     desc: Run tests for specific file (usage - task test:file -- path/to/file_test.go)

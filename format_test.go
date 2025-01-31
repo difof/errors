@@ -110,6 +110,14 @@ func TestColoredFormatter(t *testing.T) {
 				"file.go",
 			},
 		},
+		{
+			name: "no source details with message",
+			err:  NewError("", "", 0, errors.New("test error"), nil),
+			want: []string{
+				"caught error:",
+				"test error",
+			},
+		},
 	}
 
 	for _, tt := range tests {

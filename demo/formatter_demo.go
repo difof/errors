@@ -4,19 +4,22 @@ import (
 	"fmt"
 	"os"
 
+	goerrors "errors"
+
 	"github.com/difof/errors"
 	"github.com/difof/errors/demo/nested_package"
 )
 
 // createErrorChain creates a deeply nested error chain to demonstrate stack traces
 func createErrorChain(depth int) error {
-	var err error = errors.New("root cause error")
+	// var err error = errors.New("root cause error")
+	var err error = goerrors.New("root cause go-std-error")
 
 	for i := 1; i < depth; i++ {
 		if i == 3 {
 			err = errors.Wrapf(
 				nested_package.CreateNestedError(err, i),
-				"error at depth %d", i,
+				"outer error at depth %d", i,
 			)
 		} else {
 			err = errors.Wrapf(

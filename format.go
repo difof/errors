@@ -46,23 +46,31 @@ func (f *textFormatter) FormatError(err *Error) string {
 
 func (f *textFormatter) createStackEntry(err *Error) string {
 	var b strings.Builder
-	b.WriteString("at")
+
+	hasDetails := err.FuncPath != "" && err.FilePath != NO_SOURCE && err.Line != 0
+	if hasDetails {
+		b.WriteString("at ")
+	}
 
 	if err.FuncPath != "" {
-		b.WriteString(" ")
 		b.WriteString(err.FuncPath)
+		b.WriteString(" ")
 	}
 
 	if err.FilePath != NO_SOURCE {
-		b.WriteString(" ")
 		b.WriteString(err.FilePath)
 		b.WriteString(":")
 		b.WriteString(strconv.Itoa(err.Line))
 	}
 
 	if err.Message != nil {
-		b.WriteString(": ")
-		b.WriteString(err.Message.Error())
+		if hasDetails {
+			b.WriteString(": ")
+		} else {
+			b.WriteString("caught error: ")
+		}
+
+		b.WriteString(err.MessageString)
 	}
 
 	return b.String()
@@ -106,17 +114,29 @@ func (f *coloredFormatter) FormatError(err *Error) string {
 
 func (f *coloredFormatter) createStackEntry(err *Error) string {
 	var b strings.Builder
-	b.WriteString("at ")
+
+	hasDetails := err.FuncPath != "" && err.FilePath != NO_SOURCE && err.Line != 0
+	if hasDetails {
+		b.WriteString("at ")
+	}
 
 	if err.FuncPath != "" {
 		b.WriteString(f.config.InnerColor.Sprint(err.FuncPath))
 		b.WriteString(" ")
 	}
 
-	b.WriteString(f.config.SourceColor.Sprint(err.FilePath))
+	if err.FilePath != NO_SOURCE {
+		b.WriteString(f.config.SourceColor.Sprint(err.FilePath))
+		b.WriteString(":")
+		b.WriteString(strconv.Itoa(err.Line))
+	}
 
 	if err.MessageString != "" {
-		b.WriteString(": ")
+		if hasDetails {
+			b.WriteString(": ")
+		} else {
+			b.WriteString(f.config.InnerColor.Sprint("caught error: "))
+		}
 		b.WriteString(f.config.MessageColor.Sprint(err.MessageString))
 	}
 

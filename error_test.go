@@ -401,7 +401,7 @@ func TestError_DeepStdError(t *testing.T) {
 
 	// Test error entries
 	entries := level1.ExtractEntries()
-	assert.Equal(t, 3, len(entries))
+	assert.Equal(t, 4, len(entries))
 
 	// Verify each level's details
 	assert.Equal(t, "pkg.level1", entries[0].FuncPath)

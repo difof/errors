@@ -67,7 +67,14 @@ func (e *Error) ExtractEntries() []Error {
 			}
 
 			entries = append(entries, *e)
+		} else {
+			entries = append(entries, Error{
+				FilePath:      NO_SOURCE,
+				MessageString: err.Error(),
+				Message:       err,
+			})
 		}
+
 		return true
 	})
 

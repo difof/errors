@@ -9,13 +9,15 @@ vars:
   COVERAGE_HTML: out/coverage.html
   COVERAGE_LCOV: out/coverage.lcov
   BENCH_FILE: out/bench.txt
+  BENCH_PROFILE_CPU: out/cpu.prof
+  BENCH_PROFILE_MEM: out/mem.prof
 
 tasks:
   default:
     desc: Run tests
     cmd: task test
 
-  ################################### MARK: Go mod tasks
+  ################################### MARK: Go mod
 
   tidy:
     desc: Tidy up go.mod and download dependencies
@@ -25,7 +27,32 @@ tasks:
     desc: Get/update Go dependencies (usage - task get -- package-name)
     cmd: go get -u {{.CLI_ARGS}}
 
-  ################################### MARK: Test tasks
+  ################################### MARK: Coverage
+
+  coverage:ci:
+    desc: Run tests with coverage and generate reports for CI
+    silent: true
+    deps: [check-gocov, ensure-out-dir]
+    cmds:
+      - go test {{.PACKAGE_NAME}} -coverprofile={{.COVERAGE_LCOV}} -coverpkg=./... {{.CLI_ARGS}}
+      - |
+        if [ "$(uname)" = "Darwin" ]; then
+          sed -i '' "s|_$(pwd)|.|g" {{.COVERAGE_LCOV}}
+        else
+          sed -i "s|_$(pwd)|.|g" {{.COVERAGE_LCOV}}
+        fi
+
+  coverage:web:
+    desc: Run tests with coverage and generate reports
+    silent: true
+    aliases: [cov]
+    deps: [check-gocov, ensure-out-dir]
+    cmds:
+      - task test
+      - go tool cover -html={{.COVERAGE_FILE}} -o {{.COVERAGE_HTML}}
+      - task _openfile {{.COVERAGE_HTML}}
+
+  ################################### MARK: Test
   
   test:
     desc: Run all tests verbosely
@@ -41,8 +68,7 @@ tasks:
   test:func:
     desc: Run specific test function (usage - task test:func -- TestFunctionName)
     silent: true
-    cmd: |
-      task test -- -run ^{{.CLI_ARGS}}$ 
+    cmd: task test -- -run ^{{.CLI_ARGS}}$ 
 
   test:watch:
     desc: Run tests on file changes
@@ -52,7 +78,51 @@ tasks:
     method: timestamp
     watch: true
 
-  ################################### MARK: Format tasks
+  ################################### MARK: Benchmark
+
+  benchmark:stat:
+    desc: Run benchmarks and generate report
+    silent: true
+    aliases: [bench]
+    deps: [check-benchstat, gobenchmark]
+    cmd: benchstat {{.BENCH_FILE}}
+
+  benchmark:compare:
+    desc: Compare benchmarks between branches (usage - task benchmark:compare -- branch1 branch2)
+    silent: true
+    aliases: [bench:compare]
+    deps: [check-benchstat, ensure-out-dir]
+    cmds:
+      - git checkout {{index .CLI_ARGS 0}} && task _benchmark_common && mv {{.BENCH_FILE}} out/bench_old.txt
+      - git checkout {{index .CLI_ARGS 1}} && task _benchmark_common && mv {{.BENCH_FILE}} out/bench_new.txt
+      - benchstat out/bench_old.txt out/bench_new.txt
+
+  benchmark:profile:
+    desc: Run benchmarks and generate profile
+    silent: true
+    aliases: [bench:profile, prof]
+    deps: [gobenchmark]
+    cmds:
+      - echo ">> CPU Profile:"
+      - go tool pprof -top {{.CLI_ARGS}} {{.BENCH_PROFILE_CPU}} | cat
+      - echo ">> Memory Profile:"
+      - go tool pprof -top {{.CLI_ARGS}} {{.BENCH_PROFILE_MEM}} | cat
+
+  benchmark:cpu:web:
+    desc: Run benchmarks and show CPU profiler result in browser
+    silent: true
+    aliases: [cpu:web]
+    deps: [ensure-graphviz, gobenchmark]
+    cmd: go tool pprof -http=:8080 {{.BENCH_PROFILE_CPU}}
+
+  benchmark:mem:web:
+    desc: Run benchmarks and show memory profiler result in browser
+    silent: true
+    aliases: [mem:web]
+    deps: [ensure-graphviz, gobenchmark]
+    cmd: go tool pprof -http=:8080 {{.BENCH_PROFILE_MEM}}
+
+  ################################### MARK: Format
 
   fmt:
     desc: Format all Go files
@@ -62,32 +132,7 @@ tasks:
     desc: Check if files are formatted correctly
     cmd: gofmt -l {{.GO_FILES}}
 
-  ################################### MARK: Coverage tasks
-
-  coverage:ci:
-    desc: Run tests with coverage and generate reports for CI
-    silent: true
-    deps: [check-gocov, ensure-out-dir]
-    cmds:
-      - go test {{.PACKAGE_NAME}} -coverprofile={{.COVERAGE_LCOV}} -coverpkg=./... {{.CLI_ARGS}}
-      - |
-        if [ "$(uname)" = "Darwin" ]; then
-          sed -i '' "s|_$(pwd)|.|g" {{.COVERAGE_LCOV}}
-        else
-          sed -i "s|_$(pwd)|.|g" {{.COVERAGE_LCOV}}
-        fi
-
-  coverage:view:
-    desc: Run tests with coverage and generate reports
-    silent: true
-    aliases: [cov]
-    deps: [check-gocov, ensure-out-dir]
-    cmds:
-      - task test
-      - go tool cover -html={{.COVERAGE_FILE}} -o {{.COVERAGE_HTML}}
-      - task _openfile {{.COVERAGE_HTML}}
-
-  ################################### MARK: Demo tasks
+  ################################### MARK: Demo
 
   build:demo:
     desc: Build the formatter demo
@@ -101,32 +146,13 @@ tasks:
     deps: [build:demo]
     cmd: ./out/formatter_demo
 
-  ################################### MARK: Bench tasks
-
-  bench:
-    desc: Run benchmarks and generate report
-    silent: true
-    deps: [check-benchstat, ensure-out-dir]
-    cmds:
-      - task _bench_common > {{.BENCH_FILE}}
-      - benchstat {{.BENCH_FILE}}
-
-  bench:compare:
-    desc: Compare benchmarks between branches (usage - task bench:compare -- branch1 branch2)
-    silent: true
-    deps: [check-benchstat, ensure-out-dir]
-    cmds:
-      - git checkout {{index .CLI_ARGS 0}} && task _bench_common > out/bench_old.txt
-      - git checkout {{index .CLI_ARGS 1}} && task _bench_common > out/bench_new.txt
-      - benchstat out/bench_old.txt out/bench_new.txt
-
-  ################################### MARK: Clean tasks
+  ################################### MARK: Clean
 
   clean:
     desc: Clean up output folder
     cmd: rm -fr out
 
-  ################################### MARK: Internal tasks
+  ################################### MARK: Internal
 
   _openfile:
     desc: Open a file
@@ -143,10 +169,18 @@ tasks:
     silent: true
     cmd: grep "^func Test" {{.CLI_ARGS}} | awk '{print $2}' | cut -d'(' -f1
 
-  _bench_common:
+  gobenchmark:
     desc: Internal task for running benchmarks with common settings
     silent: true
-    cmd: go test -run=^$ -bench=. -count=10 -benchmem {{.PACKAGE_NAME}}
+    internal: true
+    deps: [ensure-out-dir]
+    sources:
+      - "*.go"
+    generates:
+      - "{{.BENCH_FILE}}"
+      - "{{.BENCH_PROFILE_CPU}}"
+      - "{{.BENCH_PROFILE_MEM}}"
+    cmd: go test -run=^$ -bench=. -count=5 -benchmem -cpuprofile={{.BENCH_PROFILE_CPU}} -memprofile={{.BENCH_PROFILE_MEM}} -benchtime=1s {{.PACKAGE_NAME}} > {{.BENCH_FILE}}
 
   check-gotestsum:
     desc: Check if gotestsum is installed
@@ -168,12 +202,6 @@ tasks:
         go install github.com/axw/gocov/gocov@latest
       fi
 
-  ensure-out-dir:
-    desc: Ensure output directory exists
-    internal: true
-    silent: true
-    cmd: mkdir -p out
-
   check-benchstat:
     desc: Check if benchstat is installed
     internal: true
@@ -182,4 +210,24 @@ tasks:
       if ! command -v benchstat >/dev/null 2>&1; then
         echo "Installing benchstat..."
         go install github.com/golang/go/perf/benchstat@latest
+      fi
+
+  ensure-out-dir:
+    desc: Ensure output directory exists
+    internal: true
+    silent: true
+    cmd: mkdir -p out
+
+  ensure-graphviz:
+    desc: Ensures graphviz is installed
+    internal: true
+    silent: true
+    cmd: |
+      if ! command -v dot >/dev/null 2>&1; then
+        echo "Error: graphviz is not installed"
+        echo "Please install graphviz:"
+        echo "  - Ubuntu/Debian: sudo apt-get install graphviz"
+        echo "  - macOS: brew install graphviz"
+        echo "  - Windows: choco install graphviz"
+        exit 1
       fi

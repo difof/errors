@@ -157,10 +157,10 @@ func TestJSONFormatter(t *testing.T) {
 			err:  NewError("pkg.func", "file.go", 42, errors.New("test error"), nil),
 			want: []map[string]interface{}{
 				{
-					"filepath": "file.go",
-					"funcpath": "pkg.func",
-					"line":     float64(42),
-					"message":  "test error",
+					"file_path": "file.go",
+					"func_path": "pkg.func",
+					"line":      float64(42),
+					"message":   "test error",
 				},
 			},
 		},
@@ -169,9 +169,9 @@ func TestJSONFormatter(t *testing.T) {
 			err:  NewError("pkg.func", "file.go", 42, nil, nil),
 			want: []map[string]interface{}{
 				{
-					"filepath": "file.go",
-					"funcpath": "pkg.func",
-					"line":     float64(42),
+					"file_path": "file.go",
+					"func_path": "pkg.func",
+					"line":      float64(42),
 				},
 			},
 		},
@@ -186,22 +186,22 @@ func TestJSONFormatter(t *testing.T) {
 			),
 			want: []map[string]interface{}{
 				{
-					"filepath": "file3.go",
-					"funcpath": "pkg.func3",
-					"line":     float64(12),
-					"message":  "error3",
+					"file_path": "file3.go",
+					"func_path": "pkg.func3",
+					"line":      float64(12),
+					"message":   "error3",
 				},
 				{
-					"filepath": "file2.go",
-					"funcpath": "pkg.func2",
-					"line":     float64(24),
-					"message":  "error2",
+					"file_path": "file2.go",
+					"func_path": "pkg.func2",
+					"line":      float64(24),
+					"message":   "error2",
 				},
 				{
-					"filepath": "file1.go",
-					"funcpath": "pkg.func1",
-					"line":     float64(42),
-					"message":  "error1",
+					"file_path": "file1.go",
+					"func_path": "pkg.func1",
+					"line":      float64(42),
+					"message":   "error1",
 				},
 			},
 		},
@@ -248,7 +248,7 @@ func TestJSONFormatter(t *testing.T) {
 		lines := strings.Split(got, "\n")
 		var foundLines []string
 		for _, line := range lines {
-			if strings.Contains(line, "funcpath") {
+			if strings.Contains(line, "func_path") {
 				foundLines = append(foundLines, line)
 			}
 		}
@@ -279,8 +279,8 @@ func TestJSONFormatter(t *testing.T) {
 
 		// Verify content
 		assert.Equal(t, 1, len(parsed))
-		assert.Equal(t, "pkg.func", parsed[0]["funcpath"])
-		assert.Equal(t, "file.go", parsed[0]["filepath"])
+		assert.Equal(t, "pkg.func", parsed[0]["func_path"])
+		assert.Equal(t, "file.go", parsed[0]["file_path"])
 		assert.Equal(t, float64(42), parsed[0]["line"])
 		assert.Equal(t, "test error", parsed[0]["message"])
 	})
@@ -297,10 +297,10 @@ func TestYAMLFormatter(t *testing.T) {
 			err:  NewError("pkg.func", "file.go", 42, errors.New("test error"), nil),
 			want: []map[string]interface{}{
 				{
-					"filepath": "file.go",
-					"funcpath": "pkg.func",
-					"line":     42,
-					"message":  "test error",
+					"file_path": "file.go",
+					"func_path": "pkg.func",
+					"line":      42,
+					"message":   "test error",
 				},
 			},
 		},
@@ -309,9 +309,9 @@ func TestYAMLFormatter(t *testing.T) {
 			err:  NewError("pkg.func", "file.go", 42, nil, nil),
 			want: []map[string]interface{}{
 				{
-					"filepath": "file.go",
-					"funcpath": "pkg.func",
-					"line":     42,
+					"file_path": "file.go",
+					"func_path": "pkg.func",
+					"line":      42,
 				},
 			},
 		},
@@ -326,22 +326,22 @@ func TestYAMLFormatter(t *testing.T) {
 			),
 			want: []map[string]interface{}{
 				{
-					"filepath": "file3.go",
-					"funcpath": "pkg.func3",
-					"line":     12,
-					"message":  "error3",
+					"file_path": "file3.go",
+					"func_path": "pkg.func3",
+					"line":      12,
+					"message":   "error3",
 				},
 				{
-					"filepath": "file2.go",
-					"funcpath": "pkg.func2",
-					"line":     24,
-					"message":  "error2",
+					"file_path": "file2.go",
+					"func_path": "pkg.func2",
+					"line":      24,
+					"message":   "error2",
 				},
 				{
-					"filepath": "file1.go",
-					"funcpath": "pkg.func1",
-					"line":     42,
-					"message":  "error1",
+					"file_path": "file1.go",
+					"func_path": "pkg.func1",
+					"line":      42,
+					"message":   "error1",
 				},
 			},
 		},
@@ -382,12 +382,12 @@ func TestYAMLFormatter(t *testing.T) {
 		got := formatter.FormatError(err)
 		lines := strings.Split(got, "\n")
 		assert.True(t, len(lines) > 0)
-		assert.Contains(t, lines[2], "filepath:")
+		assert.Contains(t, lines[2], "file_path:")
 
 		// Verify order of errors (should be reversed)
 		var funcpaths []string
 		for _, line := range lines {
-			if strings.Contains(line, "funcpath:") {
+			if strings.Contains(line, "func_path:") {
 				funcpaths = append(funcpaths, line)
 			}
 		}

@@ -362,7 +362,7 @@ func TestError_Formatters(t *testing.T) {
 		var parsed []map[string]interface{}
 		assert.NoError(t, json.Unmarshal([]byte(jsonStr), &parsed))
 		assert.Equal(t, 1, len(parsed))
-		assert.Equal(t, "pkg.func", parsed[0]["funcpath"])
+		assert.Equal(t, "pkg.func", parsed[0]["func_path"])
 	})
 
 	t.Run("YAML", func(t *testing.T) {
@@ -370,7 +370,7 @@ func TestError_Formatters(t *testing.T) {
 		var parsed []map[string]interface{}
 		assert.NoError(t, yaml.Unmarshal([]byte(yamlStr), &parsed))
 		assert.Equal(t, 1, len(parsed))
-		assert.Equal(t, "pkg.func", parsed[0]["funcpath"])
+		assert.Equal(t, "pkg.func", parsed[0]["func_path"])
 	})
 
 	t.Run("Colored", func(t *testing.T) {

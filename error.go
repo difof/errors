@@ -57,8 +57,8 @@ func ErrorMessageOf(err error) string {
 
 type ErrorEntry struct {
 	Message  string `json:"message,omitempty" yaml:"message,omitempty"`
-	FuncPath string `json:"funcpath,omitempty" yaml:"funcpath,omitempty"`
-	FilePath string `json:"filepath,omitempty" yaml:"filepath,omitempty"`
+	FuncPath string `json:"func_path,omitempty" yaml:"func_path,omitempty"`
+	FilePath string `json:"file_path,omitempty" yaml:"file_path,omitempty"`
 	Line     int    `json:"line,omitempty" yaml:"line,omitempty"`
 }
 

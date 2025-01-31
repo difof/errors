@@ -8,12 +8,14 @@ vars:
   COVERAGE_FILE: out/coverage.out
   COVERAGE_HTML: out/coverage.html
   COVERAGE_LCOV: out/coverage.lcov
-  # PACKAGE_NAME: github.com/difof/errors
+  BENCH_FILE: out/bench.txt
 
 tasks:
   default:
     desc: Run tests
     cmd: task test
+
+  ################################### MARK: Go mod tasks
 
   tidy:
     desc: Tidy up go.mod and download dependencies
@@ -23,6 +25,8 @@ tasks:
     desc: Get/update Go dependencies (usage - task get -- package-name)
     cmd: go get -u {{.CLI_ARGS}}
 
+  ################################### MARK: Test tasks
+  
   test:
     desc: Run all tests verbosely
     silent: true
@@ -32,7 +36,7 @@ tasks:
   test:file:
     desc: Run tests for specific file (usage - task test:file -- path/to/file_test.go)
     silent: true
-    cmd: task test -- -run $(task testfuncs -- {{.CLI_ARGS}} | sed -e ':a' -e 'N' -e '$!ba' -e 's/\n/|/g' -e 's/^/^(/' -e 's/$/)$/')
+    cmd: task test -- -run $(task _testfuncs -- {{.CLI_ARGS}} | sed -e ':a' -e 'N' -e '$!ba' -e 's/\n/|/g' -e 's/^/^(/' -e 's/$/)$/')
 
   test:func:
     desc: Run specific test function (usage - task test:func -- TestFunctionName)
@@ -48,6 +52,8 @@ tasks:
     method: timestamp
     watch: true
 
+  ################################### MARK: Format tasks
+
   fmt:
     desc: Format all Go files
     cmd: gofmt -s -w {{.GO_FILES}}
@@ -56,10 +62,12 @@ tasks:
     desc: Check if files are formatted correctly
     cmd: gofmt -l {{.GO_FILES}}
 
+  ################################### MARK: Coverage tasks
+
   coverage:ci:
     desc: Run tests with coverage and generate reports for CI
     silent: true
-    deps: [check-gocov]
+    deps: [check-gocov, ensure-out-dir]
     cmds:
       - go test {{.PACKAGE_NAME}} -coverprofile={{.COVERAGE_LCOV}} -coverpkg=./... {{.CLI_ARGS}}
       - |
@@ -73,25 +81,72 @@ tasks:
     desc: Run tests with coverage and generate reports
     silent: true
     aliases: [cov]
-    deps: [check-gocov]
+    deps: [check-gocov, ensure-out-dir]
     cmds:
       - task test
       - go tool cover -html={{.COVERAGE_FILE}} -o {{.COVERAGE_HTML}}
-      - cmd: xdg-open {{.COVERAGE_HTML}}
-        platforms: [linux]
-      - cmd: open {{.COVERAGE_HTML}}
-        platforms: [darwin]
-      - cmd: start {{.COVERAGE_HTML}}
-        platforms: [windows]
+      - task _openfile {{.COVERAGE_HTML}}
+
+  ################################### MARK: Demo tasks
+
+  build:demo:
+    desc: Build the formatter demo
+    silent: true
+    cmd: go build -o out/formatter_demo ./demo/formatter_demo.go
+
+  run:demo:
+    desc: Run the formatter demo
+    aliases: [demo,run]
+    silent: true
+    deps: [build:demo]
+    cmd: ./out/formatter_demo
+
+  ################################### MARK: Bench tasks
+
+  bench:
+    desc: Run benchmarks and generate report
+    silent: true
+    deps: [check-benchstat, ensure-out-dir]
+    cmds:
+      - task _bench_common > {{.BENCH_FILE}}
+      - benchstat {{.BENCH_FILE}}
+
+  bench:compare:
+    desc: Compare benchmarks between branches (usage - task bench:compare -- branch1 branch2)
+    silent: true
+    deps: [check-benchstat, ensure-out-dir]
+    cmds:
+      - git checkout {{index .CLI_ARGS 0}} && task _bench_common > out/bench_old.txt
+      - git checkout {{index .CLI_ARGS 1}} && task _bench_common > out/bench_new.txt
+      - benchstat out/bench_old.txt out/bench_new.txt
+
+  ################################### MARK: Clean tasks
 
   clean:
     desc: Clean up output folder
     cmd: rm -fr out
 
-  testfuncs:
+  ################################### MARK: Internal tasks
+
+  _openfile:
+    desc: Open a file
+    cmds:
+      - cmd: xdg-open {{.CLI_ARGS}}
+        platforms: [linux]
+      - cmd: open {{.CLI_ARGS}}
+        platforms: [darwin]
+      - cmd: start {{.CLI_ARGS}}
+        platforms: [windows]
+
+  _testfuncs:
     desc: Shows a list of all test functions in the given file
     silent: true
     cmd: grep "^func Test" {{.CLI_ARGS}} | awk '{print $2}' | cut -d'(' -f1
+
+  _bench_common:
+    desc: Internal task for running benchmarks with common settings
+    silent: true
+    cmd: go test -run=^$ -bench=. -count=10 -benchmem {{.PACKAGE_NAME}}
 
   check-gotestsum:
     desc: Check if gotestsum is installed
@@ -113,14 +168,18 @@ tasks:
         go install github.com/axw/gocov/gocov@latest
       fi
 
-  build:demo:
-    desc: Build the formatter demo
+  ensure-out-dir:
+    desc: Ensure output directory exists
+    internal: true
     silent: true
-    cmd: go build -o out/formatter_demo ./demo/formatter_demo.go
+    cmd: mkdir -p out
 
-  run:demo:
-    desc: Run the formatter demo
-    aliases: [demo,run]
+  check-benchstat:
+    desc: Check if benchstat is installed
+    internal: true
     silent: true
-    deps: [build:demo]
-    cmd: ./out/formatter_demo
+    cmd: |
+      if ! command -v benchstat >/dev/null 2>&1; then
+        echo "Installing benchstat..."
+        go install github.com/golang/go/perf/benchstat@latest
+      fi

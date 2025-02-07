@@ -13,7 +13,7 @@ import (
 // Formatter interface for custom formatting
 type Formatter interface {
 	// FormatError formats a single error node
-	FormatError(err *Error) string
+	FormatError(err *ErrorChain) string
 }
 
 // TextConfig configures the text formatter
@@ -27,8 +27,8 @@ type textFormatter struct {
 	config TextConfig
 }
 
-func (f *textFormatter) FormatError(err *Error) string {
-	entries := err.ExtractEntries()
+func (f *textFormatter) FormatError(err *ErrorChain) string {
+	entries := Collapse(err)
 
 	// Build the output with proper indentation
 	// Iterate in reverse to show root cause first
@@ -47,7 +47,8 @@ func (f *textFormatter) FormatError(err *Error) string {
 func (f *textFormatter) createStackEntry(err *ErrorEntry) string {
 	var b strings.Builder
 
-	hasDetails := err.FuncPath != "" && err.FilePath != NO_SOURCE && err.Line != 0
+	hasDetails := err.FuncPath != "" && err.FilePath != "" && err.Line != 0
+
 	if hasDetails {
 		b.WriteString("at ")
 	}
@@ -57,8 +58,11 @@ func (f *textFormatter) createStackEntry(err *ErrorEntry) string {
 		b.WriteString(" ")
 	}
 
-	if err.FilePath != NO_SOURCE {
+	if err.FilePath != "" {
 		b.WriteString(err.FilePath)
+	}
+
+	if err.Line != 0 {
 		b.WriteString(":")
 		b.WriteString(strconv.Itoa(err.Line))
 	}
@@ -67,7 +71,7 @@ func (f *textFormatter) createStackEntry(err *ErrorEntry) string {
 		if hasDetails {
 			b.WriteString(": ")
 		} else {
-			b.WriteString("caught error: ")
+			b.WriteString("error: ")
 		}
 
 		b.WriteString(err.Message)
@@ -91,8 +95,8 @@ type coloredFormatter struct {
 	config ColorConfig
 }
 
-func (f *coloredFormatter) FormatError(err *Error) string {
-	entries := err.ExtractEntries()
+func (f *coloredFormatter) FormatError(err *ErrorChain) string {
+	entries := Collapse(err)
 
 	// Reverse to show root cause first
 	for i := 0; i < len(entries)/2; i++ {
@@ -115,7 +119,7 @@ func (f *coloredFormatter) FormatError(err *Error) string {
 func (f *coloredFormatter) createStackEntry(err *ErrorEntry) string {
 	var b strings.Builder
 
-	hasDetails := err.FuncPath != "" && err.FilePath != NO_SOURCE && err.Line != 0
+	hasDetails := err.FuncPath != "" && err.FilePath != "" && err.Line != 0
 	if hasDetails {
 		b.WriteString("at ")
 	}
@@ -125,8 +129,11 @@ func (f *coloredFormatter) createStackEntry(err *ErrorEntry) string {
 		b.WriteString(" ")
 	}
 
-	if err.FilePath != NO_SOURCE {
+	if err.FilePath != "" {
 		b.WriteString(f.config.SourceColor.Sprint(err.FilePath))
+	}
+
+	if err.Line != 0 {
 		b.WriteString(":")
 		b.WriteString(strconv.Itoa(err.Line))
 	}
@@ -135,7 +142,7 @@ func (f *coloredFormatter) createStackEntry(err *ErrorEntry) string {
 		if hasDetails {
 			b.WriteString(": ")
 		} else {
-			b.WriteString(f.config.InnerColor.Sprint("caught error: "))
+			b.WriteString(f.config.InnerColor.Sprint("error: "))
 		}
 		b.WriteString(f.config.MessageColor.Sprint(err.Message))
 	}
@@ -156,8 +163,8 @@ type jsonFormatter struct {
 	config JSONConfig
 }
 
-func (f *jsonFormatter) FormatError(err *Error) string {
-	entries := err.ExtractEntries()
+func (f *jsonFormatter) FormatError(err *ErrorChain) string {
+	entries := Collapse(err)
 
 	// Reverse to show root cause first
 	for i := 0; i < len(entries)/2; i++ {
@@ -186,8 +193,8 @@ type yamlFormatter struct {
 	config YAMLConfig
 }
 
-func (f *yamlFormatter) FormatError(err *Error) string {
-	entries := err.ExtractEntries()
+func (f *yamlFormatter) FormatError(err *ErrorChain) string {
+	entries := Collapse(err)
 
 	// Reverse to show root cause first
 	for i := 0; i < len(entries)/2; i++ {

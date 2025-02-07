@@ -4,13 +4,13 @@ import "fmt"
 
 // MustResult panics if the error is not nil, otherwise returns the result.
 // This is useful for operations that shouldn't fail during normal execution.
-// Use Recover to catch the panic if needed.
+// Use Recover to catch the panic.
 //
 // Example:
 //
 //	user := errors.MustResult(db.GetUser(id))
 func MustResult[T any](r T, err error) T {
-	mayPanicf(err, "")
+	mayPanicf(1, err, "")
 	return r
 }
 
@@ -22,7 +22,7 @@ func MustResult[T any](r T, err error) T {
 //	user := errors.MustResultf(db.GetUser(id))("failed to get user %d", id)
 func MustResultf[T any](r T, err error) func(format string, params ...any) T {
 	return func(format string, params ...any) T {
-		mayPanicf(err, format, params...)
+		mayPanicf(2, err, format, params...)
 		return r
 	}
 }
@@ -35,7 +35,7 @@ func MustResultf[T any](r T, err error) func(format string, params ...any) T {
 //
 //	key, value := errors.MustResult2(cache.Get("mykey"))
 func MustResult2[A, B any](a A, b B, err error) (A, B) {
-	mayPanicf(err, "")
+	mayPanicf(1, err, "")
 	return a, b
 }
 
@@ -47,7 +47,7 @@ func MustResult2[A, B any](a A, b B, err error) (A, B) {
 //	key, value := errors.MustResult2f(cache.Get("mykey"))("failed to get cache key %s", "mykey")
 func MustResult2f[A, B any](a A, b B, err error) func(format string, params ...any) (A, B) {
 	return func(format string, params ...any) (A, B) {
-		mayPanicf(err, format, params...)
+		mayPanicf(2, err, format, params...)
 		return a, b
 	}
 }
@@ -59,7 +59,7 @@ func MustResult2f[A, B any](a A, b B, err error) func(format string, params ...a
 //
 //	errors.Must(db.Connect())
 func Must(err error) {
-	mayPanicf(err, "")
+	mayPanicf(1, err, "")
 }
 
 // Mustf panics with a formatted message if the error is not nil.
@@ -69,7 +69,7 @@ func Must(err error) {
 //	errors.Mustf(db.Connect())("failed to connect to database: %v", err)
 func Mustf(err error) func(format string, params ...any) {
 	return func(format string, params ...any) {
-		mayPanicf(err, format, params...)
+		mayPanicf(2, err, format, params...)
 	}
 }
 

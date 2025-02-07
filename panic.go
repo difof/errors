@@ -5,20 +5,18 @@ package errors
 // create a new error message that wraps the original error.
 //
 // Parameters:
+//   - skip: number of stack frames to skip
 //   - err: the error to check
 //   - format: optional format string for the error message
 //   - params: arguments for the format string
-//
-// This function skips 2 stack frames when recording the source location
-// to ensure the correct source file and line number are captured.
-func mayPanicf(err error, format string, params ...any) {
+func mayPanicf(skip int, err error, format string, params ...any) {
 	if err == nil {
 		return
 	}
 
 	if format == "" {
-		panic(WrapSkip(2, err))
+		panic(WrapSkip(skip+1, err))
 	} else {
-		panic(WrapSkipf(2, err, format, params...))
+		panic(WrapSkipf(skip+1, err, format, params...))
 	}
 }

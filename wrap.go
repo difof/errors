@@ -1,10 +1,5 @@
 package errors
 
-import (
-	"errors"
-	"fmt"
-)
-
 // Wrap wraps an existing error with stack trace information.
 // The wrapped error will include the source location where Wrap was called.
 //
@@ -13,8 +8,16 @@ import (
 //	if err := doSomething(); err != nil {
 //	    return errors.Wrap(err)
 //	}
-func Wrap(inner error) error {
-	return WrapSkip(2, inner)
+func Wrap(err error) error {
+	// there are two scenarios:
+	// 1. err is an ErrorChain
+	// 2. err is a standard error
+	//
+	// if err is an ErrorChain, simply set it as next error
+	// if err is a standard error:
+	// - unwrap loop until we get to the root error
+	// - create no-pc error chains at each unwrap step
+	return WrapSkip(2, err)
 }
 
 // WrapResult wraps an existing error and returns both the result and the error.
@@ -48,25 +51,6 @@ func WrapResultf[T any](r T, err error) func(format string, params ...any) (T, e
 	}
 }
 
-// Wrape creates a new error that wraps an existing error, adding both
-// a new error message and the original error's information.
-//
-// Parameters:
-//   - err: the new error message
-//   - inner: the error to wrap
-//
-// Example:
-//
-//	return errors.Wrape(errors.New("validation failed"), err)
-func Wrape(err error, inner error) error {
-	if err == nil && inner == nil {
-		return nil
-	}
-
-	funcpath, filepath, line := getCallerPath(1)
-	return NewError(funcpath, filepath, line, err, inner)
-}
-
 // Wrapf creates a new formatted error that wraps an existing error.
 // The new error message is formatted according to format and params.
 //
@@ -87,14 +71,13 @@ func Wrapf(inner error, format string, params ...any) error {
 //
 // Parameters:
 //   - skip: number of stack frames to skip
-//   - inner: the error to wrap
-func WrapSkip(skip int, inner error) error {
-	if inner == nil {
+//   - err: the error to wrap
+func WrapSkip(skip int, err error) error {
+	if err == nil {
 		return nil
 	}
 
-	funcpath, filepath, line := getCallerPath(skip)
-	return NewError(funcpath, filepath, line, nil, inner)
+	return newErrorChain(getCallerPC(skip), err, "")
 }
 
 // WrapSkipf creates a new formatted error wrapping an existing error,
@@ -102,14 +85,13 @@ func WrapSkip(skip int, inner error) error {
 //
 // Parameters:
 //   - skip: number of stack frames to skip
-//   - inner: the error to wrap
+//   - err: the error to wrap
 //   - format: format string for the new error message
 //   - params: arguments for the format string
-func WrapSkipf(skip int, inner error, format string, params ...any) error {
-	if inner == nil && format == "" {
+func WrapSkipf(skip int, err error, format string, params ...any) error {
+	if err == nil && format == "" {
 		return nil
 	}
 
-	funcpath, filepath, line := getCallerPath(skip)
-	return NewError(funcpath, filepath, line, errors.New(fmt.Sprintf(format, params...)), inner)
+	return newErrorChain(getCallerPC(skip), err, format, params...)
 }

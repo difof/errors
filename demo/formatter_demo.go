@@ -53,7 +53,7 @@ func main() {
 	}
 
 	// Cast to our Error type
-	e := err.(*errors.Error)
+	e := err.(*errors.ErrorChain)
 
 	// Print error in different formats
 	fmt.Println("=== Default Format ===")
@@ -80,5 +80,5 @@ func main() {
 
 	// Print just the error message without the stack trace
 	fmt.Println("=== Error Message Only ===")
-	fmt.Println(e.ErrorMessage())
+	fmt.Println(e.CoreMessage())
 }

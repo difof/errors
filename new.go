@@ -1,10 +1,5 @@
 package errors
 
-import (
-	"errors"
-	"fmt"
-)
-
 // New creates a new error with stack trace information.
 // The error message will include the source location where New was called.
 //
@@ -32,8 +27,7 @@ func Newf(format string, params ...any) error {
 //   - skip: number of stack frames to skip
 //   - msg: error message
 func NewSkip(skip int, msg string) error {
-	funcpath, filepath, line := getCallerPath(skip)
-	return NewError(funcpath, filepath, line, errors.New(msg), nil)
+	return newErrorChain(getCallerPC(skip), nil, msg)
 }
 
 // NewSkipf creates a new formatted error, skipping the specified number
@@ -44,6 +38,5 @@ func NewSkip(skip int, msg string) error {
 //   - format: format string for the error message
 //   - params: arguments for the format string
 func NewSkipf(skip int, format string, params ...any) error {
-	funcpath, filepath, line := getCallerPath(skip)
-	return NewError(funcpath, filepath, line, errors.New(fmt.Sprintf(format, params...)), nil)
+	return newErrorChain(getCallerPC(skip), nil, format, params...)
 }

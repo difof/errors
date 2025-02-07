@@ -11,7 +11,7 @@ import "fmt"
 //	return errors.Catch(db.Query("SELECT * FROM users"))
 func Catch(err error) error {
 	if err != nil {
-		return WrapSkip(1, err)
+		return WrapSkip(2, err)
 	}
 	return nil
 }
@@ -29,7 +29,7 @@ func Catch(err error) error {
 func Catchf(err error, msg string, params ...any) error {
 	if err != nil {
 		msg = fmt.Sprintf(msg, params...)
-		return WrapSkipf(1, err, msg)
+		return WrapSkipf(2, err, msg)
 	}
 	return nil
 }
@@ -55,8 +55,7 @@ func IgnoreResult[R any]() func(R) error { return func(R) error { return nil } }
 //
 // Example:
 //
-//	rows, err := db.Query("SELECT * FROM users")
-//	return CatchResult(rows, err)(func(rows *sql.Rows) error {
+//	return CatchResult(db.Query("SELECT * FROM users"))(func(rows *sql.Rows) error {
 //	    defer rows.Close()
 //	    // process rows
 //	    return nil
@@ -64,13 +63,13 @@ func IgnoreResult[R any]() func(R) error { return func(R) error { return nil } }
 func CatchResult[R any](result R, err error) func(callback func(R) error) error {
 	if err != nil {
 		return func(f func(result R) error) error {
-			return err
+			return WrapSkip(3, err)
 		}
 	}
 
 	return func(f func(result R) error) (err error) {
 		if err = f(result); err != nil {
-			return WrapSkip(1, err)
+			return WrapSkip(3, err)
 		}
 
 		return
@@ -90,8 +89,7 @@ func CatchResult[R any](result R, err error) func(callback func(R) error) error 
 //
 // Example:
 //
-//	rows, err := db.Query("SELECT * FROM users")
-//	return CatchResultf(rows, err)(func(rows *sql.Rows) error {
+//	return CatchResultf(db.Query("SELECT * FROM users"))(func(rows *sql.Rows) error {
 //	    defer rows.Close()
 //	    // process rows
 //	    return nil
@@ -99,13 +97,13 @@ func CatchResult[R any](result R, err error) func(callback func(R) error) error 
 func CatchResultf[R any](result R, err error) func(callback func(R) error, format string, params ...any) error {
 	if err != nil {
 		return func(f func(result R) error, format string, params ...any) error {
-			return WrapSkipf(1, err, format, params...)
+			return WrapSkipf(3, err, format, params...)
 		}
 	}
 
 	return func(f func(result R) error, format string, params ...any) (err error) {
 		if err = f(result); err != nil {
-			return WrapSkipf(1, err, format, params...)
+			return WrapSkipf(3, err, format, params...)
 		}
 
 		return

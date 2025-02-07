@@ -6,6 +6,7 @@ func recoverError(r any, skipFrames int) error {
 	if r == nil {
 		return nil
 	}
+
 	if err, ok := r.(error); ok {
 		return err
 	}
@@ -16,24 +17,20 @@ func recoverError(r any, skipFrames int) error {
 // If the recovered value is not an error, it will be wrapped in a new error.
 //
 // This function is typically used in a defer statement to handle panics and
-// convert them to errors that can be returned from the function.
+// convert them to errors that can be returned from the function, specially
+// in combination with Must.
 //
-// It can be used in conjunction with Must to handle any errors that may occur,
-// so you don't have to handle every error.
-//
-// Parameters:
-//   - errp: pointer to error variable that will receive the recovered error
+// The error pointer should not be nil, otherwise the panic will be propagated.
 //
 // Example:
 //
 //	func DoSomething() (err error) {
 //	    defer errors.Recover(&err)
-//	    // ... code that might panic
+//	    // ... call chain that might panic
 //	    return
 //	}
 func Recover(errp *error) {
 	if errp == nil {
-		// If errp is nil, let the panic propagate
 		return
 	}
 

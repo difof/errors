@@ -1,5 +1,10 @@
 package errors
 
+const (
+	wrapSkipFrames  = 2
+	wrapSkipfFrames = 3
+)
+
 // Wrap wraps an existing error with stack trace information.
 // The wrapped error will include the source location where Wrap was called.
 //
@@ -17,7 +22,7 @@ func Wrap(err error) error {
 	// if err is a standard error:
 	// - unwrap loop until we get to the root error
 	// - create no-pc error chains at each unwrap step
-	return WrapSkip(2, err)
+	return WrapSkip(wrapSkipFrames, err)
 }
 
 // WrapResult wraps an existing error and returns both the result and the error.
@@ -31,7 +36,7 @@ func WrapResult[T any](r T, err error) (T, error) {
 		return r, nil
 	}
 
-	return r, WrapSkip(2, err)
+	return r, WrapSkip(wrapSkipFrames, err)
 }
 
 // WrapResultf returns a formatter function that wraps an existing error and returns both the result and the error.
@@ -47,7 +52,7 @@ func WrapResultf[T any](r T, err error) func(format string, params ...any) (T, e
 			return r, nil
 		}
 
-		return r, WrapSkipf(3, err, format, params...)
+		return r, WrapSkipf(wrapSkipfFrames, err, format, params...)
 	}
 }
 
@@ -63,7 +68,7 @@ func WrapResultf[T any](r T, err error) func(format string, params ...any) (T, e
 //
 //	return errors.Wrapf(err, "failed to process user %s", username)
 func Wrapf(inner error, format string, params ...any) error {
-	return WrapSkipf(2, inner, format, params...)
+	return WrapSkipf(wrapSkipfFrames, inner, format, params...)
 }
 
 // WrapSkip wraps an existing error, skipping the specified number

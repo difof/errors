@@ -9,11 +9,11 @@ import (
 // ErrorEntry is the textual representation of an error entry in the chain.
 // It is used for error formatting in text, JSON and YAML.
 type ErrorEntry struct {
+	pc       uintptr
 	Message  string `json:"message,omitempty" yaml:"message,omitempty"`
 	FuncPath string `json:"func_path,omitempty" yaml:"func_path,omitempty"`
 	FilePath string `json:"file_path,omitempty" yaml:"file_path,omitempty"`
 	Line     int    `json:"line,omitempty" yaml:"line,omitempty"`
-	pc       uintptr
 }
 
 // Collapse unwraps all the errors in the chain (either ErrorChain or standard error)
@@ -46,22 +46,30 @@ func Collapse(err error) (entries []ErrorEntry) {
 	}
 
 	elen := len(entries)
+	pcbuf := make([]uintptr, 0, elen)
+	entriesWithPC := make([]int, 0, elen)
 
-	pcbuf := make([]uintptr, elen)
 	for i, entry := range entries {
-		pcbuf[i] = entry.pc
+		if entry.pc != 0 {
+			pcbuf = append(pcbuf, entry.pc)
+			entriesWithPC = append(entriesWithPC, i)
+		}
 	}
 
 	frames := runtime.CallersFrames(pcbuf)
+
 	i := 0
-	for frame, more := frames.Next(); more; frame, more = frames.Next() {
-		entries[i].FilePath = frame.File
-		entries[i].Line = frame.Line
-		entries[i].FuncPath = frame.Function
+	for frame, _ := frames.Next(); frame.PC != 0; frame, _ = frames.Next() {
+		entryIndex := entriesWithPC[i]
 		i++
+
+		entries[entryIndex].FilePath = frame.File
+		entries[entryIndex].Line = frame.Line
+		entries[entryIndex].FuncPath = frame.Function
 	}
 
-	for i, j := 0, elen-1; i < j; i, j = i+1, j-1 {
+	// reverse the entries
+	for i, j := 0, len(entries)-1; i < j; i, j = i+1, j-1 {
 		entries[i], entries[j] = entries[j], entries[i]
 	}
 

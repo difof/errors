@@ -1,10 +1,9 @@
 package main
 
 import (
+	goerrors "errors"
 	"fmt"
 	"os"
-
-	goerrors "errors"
 
 	"github.com/difof/errors"
 	"github.com/difof/errors/demo/nested_package"
@@ -19,7 +18,7 @@ func createErrorChain(depth int) error {
 		if i == 3 {
 			err = errors.Wrapf(
 				nested_package.CreateNestedError(err, i),
-				"outer error at depth %d", i,
+				"outer error",
 			)
 		} else {
 			err = errors.Wrapf(
@@ -77,8 +76,4 @@ func main() {
 		fmt.Println(e.YAML())
 		fmt.Println()
 	}
-
-	// Print just the error message without the stack trace
-	fmt.Println("=== Error Message Only ===")
-	fmt.Println(e.CoreMessage())
 }

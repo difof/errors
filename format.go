@@ -31,10 +31,9 @@ func (f *textFormatter) FormatError(err *ErrorChain) string {
 	entries := Collapse(err)
 
 	// Build the output with proper indentation
-	// Iterate in reverse to show root cause first
 	var b strings.Builder
-	for i := len(entries) - 1; i >= 0; i-- {
-		if i < len(entries)-1 {
+	for i := 0; i < len(entries); i++ {
+		if i > 0 {
 			b.WriteString("\n")
 			b.WriteString(f.config.Indent)
 		}
@@ -98,12 +97,6 @@ type coloredFormatter struct {
 func (f *coloredFormatter) FormatError(err *ErrorChain) string {
 	entries := Collapse(err)
 
-	// Reverse to show root cause first
-	for i := 0; i < len(entries)/2; i++ {
-		j := len(entries) - 1 - i
-		entries[i], entries[j] = entries[j], entries[i]
-	}
-
 	// Build colored output
 	var b strings.Builder
 	for i, err := range entries {
@@ -166,12 +159,6 @@ type jsonFormatter struct {
 func (f *jsonFormatter) FormatError(err *ErrorChain) string {
 	entries := Collapse(err)
 
-	// Reverse to show root cause first
-	for i := 0; i < len(entries)/2; i++ {
-		j := len(entries) - 1 - i
-		entries[i], entries[j] = entries[j], entries[i]
-	}
-
 	var data []byte
 	if f.config.Indent == "" {
 		data, _ = json.Marshal(entries)
@@ -195,12 +182,6 @@ type yamlFormatter struct {
 
 func (f *yamlFormatter) FormatError(err *ErrorChain) string {
 	entries := Collapse(err)
-
-	// Reverse to show root cause first
-	for i := 0; i < len(entries)/2; i++ {
-		j := len(entries) - 1 - i
-		entries[i], entries[j] = entries[j], entries[i]
-	}
 
 	data, _ := yaml.Marshal(entries)
 

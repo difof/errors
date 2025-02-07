@@ -18,11 +18,17 @@ type ErrorEntry struct {
 // Collapse unwraps all the errors in the chain (either ErrorChain or standard error)
 // and returns a slice of ErrorEntry with string representation of the error
 // and the stacktrace.
+//
+// Note that any ErrorChain wrapped by fmt.Errorf will have formatting issues in
+// color, JSON, YAML and any other custom formatters because of the way go's
+// standard errors package unwraps errors into strings.
+//
+// You can use HasErrorChain to check if the error contains an ErrorChain for
+// appropriate error handling.
 func Collapse(err error) (entries []ErrorEntry) {
 	entries = []ErrorEntry{}
 
 	for current := err; current != nil; {
-		// var ec *ErrorChain
 		if ec, ok := current.(*ErrorChain); ok {
 			msg := ec.format
 			if len(ec.params) > 0 {

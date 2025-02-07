@@ -52,7 +52,10 @@ func (e *ErrorChain) Error() string {
 	return TextFormatter(DefaultTextConfig()).FormatError(e)
 }
 
-// Unwrap returns the inner error, implementing the interface
-// required for errors.Is and errors.As compatibility.
-// also used for errors.Unwrap
+// Unwrap returns the inner error, implementing the errors.Unwrap interface
 func (e *ErrorChain) Unwrap() error { return e.inner }
+
+// HasErrorChain returns true if the error is an ErrorChain
+func HasErrorChain(err error) bool {
+	return Is(err, &ErrorChain{})
+}

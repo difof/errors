@@ -1,7 +1,6 @@
 package errors
 
 import (
-	goerrors "errors"
 	"fmt"
 	"runtime"
 )
@@ -23,8 +22,8 @@ func Collapse(err error) (entries []ErrorEntry) {
 	entries = []ErrorEntry{}
 
 	for current := err; current != nil; {
-		var ec *ErrorChain
-		if goerrors.As(current, &ec) {
+		// var ec *ErrorChain
+		if ec, ok := current.(*ErrorChain); ok {
 			msg := ec.format
 			if len(ec.params) > 0 {
 				msg = fmt.Sprintf(ec.format, ec.params...)

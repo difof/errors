@@ -33,7 +33,14 @@ func createErrorChain(depth int) error {
 
 func main() {
 	// Create a deep error chain
-	err := createErrorChain(5)
+	err := errors.Wrapf(
+		errors.Wrapf(
+			fmt.Errorf("std wrapped error %w", createErrorChain(5)),
+			"wrapped error 2",
+		),
+		"wrapped error 1",
+	)
+
 	if err == nil {
 		fmt.Println("No error occurred!")
 		os.Exit(0)
@@ -51,29 +58,26 @@ func main() {
 		showYAML = true
 	}
 
-	// Cast to our Error type
-	e := err.(*errors.ErrorChain)
-
 	// Print error in different formats
 	fmt.Println("=== Default Format ===")
-	fmt.Println(e.Error())
+	fmt.Println(err.Error())
 	fmt.Println()
 
 	if showColor {
 		fmt.Println("=== Colored Format (for terminals) ===")
-		fmt.Println(e.Colored())
+		fmt.Println(err.(*errors.ErrorChain).Colored())
 		fmt.Println()
 	}
 
 	if showJSON {
 		fmt.Println("=== JSON Format ===")
-		fmt.Println(e.JSON())
+		fmt.Println(err.(*errors.ErrorChain).JSON())
 		fmt.Println()
 	}
 
 	if showYAML {
 		fmt.Println("=== YAML Format ===")
-		fmt.Println(e.YAML())
+		fmt.Println(err.(*errors.ErrorChain).YAML())
 		fmt.Println()
 	}
 }

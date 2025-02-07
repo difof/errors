@@ -8,7 +8,7 @@ import (
 // skipping the specified number of frames + the getCallerPC function itself.
 func getCallerPC(skip int) uintptr {
 	var pcs [1]uintptr
-	if runtime.Callers(skip+1, pcs[:]) == 0 {
+	if runtime.Callers(skip+2, pcs[:]) == 0 {
 		return 0
 	}
 	return pcs[0]

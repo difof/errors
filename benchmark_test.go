@@ -1,8 +1,21 @@
 package errors
 
 import (
+	"runtime"
 	"testing"
 )
+
+// getCallerPath returns the caller's source location with optional function name
+func getCallerPath(skip int) (funcname string, filepath string, line int) {
+	pc, filepath, line, ok := runtime.Caller(skip + 1)
+	if !ok {
+		return "", "", 0
+	}
+
+	funcname = runtime.FuncForPC(pc).Name()
+
+	return
+}
 
 // recursiveGetCallerPath creates a deep call stack of specified depth and then calls getCallerPath
 func recursiveGetCallerPath(depth, skip int) (string, string, int) {
@@ -40,16 +53,8 @@ func BenchmarkGetCallerPath(b *testing.B) {
 	}
 }
 
-// createErrorChain creates a chain of errors of specified depth
-func createErrorChain(depth int) error {
-	if depth <= 0 {
-		return New("base error")
-	}
-	return Wrap(createErrorChain(depth - 1))
-}
-
 func BenchmarkWrapFunctions(b *testing.B) {
-	baseErr := createErrorChain(50) // medium depth error chain
+	baseErr := createErrorChain(50, false) // medium depth error chain
 	result := 42
 
 	benchmarks := []struct {
@@ -92,30 +97,26 @@ func BenchmarkWrapFunctions(b *testing.B) {
 	}
 }
 
-func BenchmarkNewFunctions(b *testing.B) {
+func BenchmarkErrorString(b *testing.B) {
 	benchmarks := []struct {
-		name string
-		fn   func()
+		name      string
+		chainSize int
 	}{
-		{
-			name: "New",
-			fn: func() {
-				_ = New("test error")
-			},
-		},
-		{
-			name: "Newf",
-			fn: func() {
-				_ = Newf("formatted error: %d", 42)
-			},
-		},
+		{"Shallow", 1},
+		{"Medium", 50},
+		{"Deep", 100},
 	}
 
 	for _, bm := range benchmarks {
 		b.Run(bm.name, func(b *testing.B) {
+			err := createErrorChain(bm.chainSize, false)
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
-				bm.fn()
+				s := err.Error()
+				// Prevent compiler optimization
+				if len(s) == 0 {
+					b.Fatal("unexpected empty error string")
+				}
 			}
 		})
 	}

@@ -4,10 +4,9 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/difof/errors)](https://goreportcard.com/report/github.com/difof/errors)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/difof/errors)](https://golang.org/dl/)
-[![Build Status](https://github.com/difof/errors/workflows/build/badge.svg)](https://github.com/difof/errors/actions)
 
 A powerful drop-in replacement for Go's standard error handling with rich features:
-- 📍 Beautiful stacktraces with source locations
+- 📍 Stacktraces with source locations
 - 🎯 Error wrapping with context
 - 🔄 Error catching and result handling
 - ⚡ Panic recovery utilities

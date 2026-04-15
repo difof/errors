@@ -144,7 +144,7 @@ tasks:
     aliases: [demo,run]
     silent: true
     deps: [build:demo]
-    cmd: ./out/formatter_demo
+    cmd: ./out/formatter_demo {{.CLI_ARGS}}
 
   ################################### MARK: Clean
 

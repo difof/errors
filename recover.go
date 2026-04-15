@@ -20,7 +20,7 @@ func recoverError(r any, skipFrames int) error {
 // convert them to errors that can be returned from the function, specially
 // in combination with Must.
 //
-// The error pointer should not be nil, otherwise the panic will be propagated.
+// The error pointer should not be nil, otherwise the function returns and does nothing. 
 //
 // Example:
 //

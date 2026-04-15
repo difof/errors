@@ -31,23 +31,26 @@ func newErrorChain(pc uintptr, inner error, format string, params ...any) *Error
 	}
 }
 
-// JSON returns a JSON formatted representation of the error
+// JSON returns a detailed JSON representation of the error chain,
+// including stack/source metadata when available.
 func (e *ErrorChain) JSON() string {
 	return JSONFormatter(DefaultJSONConfig()).FormatError(e)
 }
 
-// YAML returns a YAML formatted representation of the error
+// YAML returns a detailed YAML representation of the error chain,
+// including stack/source metadata when available.
 func (e *ErrorChain) YAML() string {
 	return YAMLFormatter(DefaultYAMLConfig()).FormatError(e)
 }
 
-// Colored returns a colored representation of the error for terminal output
+// Colored returns a detailed colored representation of the error chain
+// for terminal output, including stack/source metadata when available.
 func (e *ErrorChain) Colored() string {
 	return ColoredFormatter(DefaultColorConfig()).FormatError(e)
 }
 
-// Error implements the error interface and returns the complete
-// stack trace of this error as a newline-separated string.
+// Error implements the error interface and returns the default detailed
+// text rendering of this error, including stack/source metadata.
 func (e *ErrorChain) Error() string {
 	return TextFormatter(DefaultTextConfig()).FormatError(e)
 }

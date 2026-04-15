@@ -10,9 +10,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Formatter interface for custom formatting
+// Formatter formats an ErrorChain into a detailed representation that can
+// include stack/source metadata.
 type Formatter interface {
-	// FormatError formats a single error node
+	// FormatError formats the full error chain.
 	FormatError(err *ErrorChain) string
 }
 
@@ -22,7 +23,7 @@ type TextConfig struct {
 	Indent string
 }
 
-// textFormatter is the default formatter that maintains the original error format
+// textFormatter is the default detailed formatter.
 type textFormatter struct {
 	config TextConfig
 }
@@ -89,7 +90,7 @@ type ColorConfig struct {
 	InnerColor *color.Color
 }
 
-// coloredFormatter formats errors with colors for terminal output
+// coloredFormatter formats detailed errors with colors for terminal output.
 type coloredFormatter struct {
 	config ColorConfig
 }
@@ -151,7 +152,7 @@ type JSONConfig struct {
 	Prefix string
 }
 
-// jsonFormatter formats errors as JSON objects
+// jsonFormatter formats detailed errors as JSON objects.
 type jsonFormatter struct {
 	config JSONConfig
 }
@@ -175,7 +176,7 @@ type YAMLConfig struct {
 	Indent string
 }
 
-// yamlFormatter formats errors as YAML documents
+// yamlFormatter formats detailed errors as YAML documents.
 type yamlFormatter struct {
 	config YAMLConfig
 }
@@ -249,27 +250,27 @@ func DefaultColorConfig() ColorConfig {
 	}
 }
 
-// TextFormatter returns a new text formatter instance with custom configuration
+// TextFormatter returns a new detailed text formatter instance with custom configuration.
 func TextFormatter(config TextConfig) Formatter {
 	return &textFormatter{config: config}
 }
 
-// JSONFormatter returns a new JSON formatter instance with custom configuration
+// JSONFormatter returns a new detailed JSON formatter instance with custom configuration.
 func JSONFormatter(config JSONConfig) Formatter {
 	return &jsonFormatter{config: config}
 }
 
-// YAMLFormatter returns a new YAML formatter instance with custom configuration
+// YAMLFormatter returns a new detailed YAML formatter instance with custom configuration.
 func YAMLFormatter(config YAMLConfig) Formatter {
 	return &yamlFormatter{config: config}
 }
 
-// ColoredFormatter returns a new colored formatter instance with custom configuration
+// ColoredFormatter returns a new detailed colored formatter instance with custom configuration.
 func ColoredFormatter(config ColorConfig) Formatter {
 	return &coloredFormatter{config: config}
 }
 
-// DefaultFormatter returns the default text formatter with default configuration
+// DefaultFormatter returns the default detailed text formatter with default configuration.
 func DefaultFormatter() Formatter {
 	return TextFormatter(DefaultTextConfig())
 }

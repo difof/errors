@@ -54,7 +54,7 @@ func BenchmarkGetCallerPath(b *testing.B) {
 }
 
 func BenchmarkWrapFunctions(b *testing.B) {
-	baseErr := createErrorChain(50, false) // medium depth error chain
+	baseErr := test_util_createErrorChain(50, false) // medium depth error chain
 	result := 42
 
 	benchmarks := []struct {
@@ -109,7 +109,7 @@ func BenchmarkErrorString(b *testing.B) {
 
 	for _, bm := range benchmarks {
 		b.Run(bm.name, func(b *testing.B) {
-			err := createErrorChain(bm.chainSize, false)
+			err := test_util_createErrorChain(bm.chainSize, false)
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
 				s := err.Error()

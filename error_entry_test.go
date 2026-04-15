@@ -5,6 +5,6 @@ import (
 )
 
 func TestErrorEntry_Collapse(t *testing.T) {
-	err := createErrorChain(5, false)
+	err := test_util_createErrorChain(5, false)
 	_ = err.Error()
 }

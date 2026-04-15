@@ -8,6 +8,7 @@
 A powerful drop-in replacement for Go's standard error handling with rich features:
 - 📍 Stacktraces with source locations
 - 🎯 Error wrapping with context
+- 📝 Stackless message helpers
 - 🔄 Error catching and result handling
 - ⚡ Panic recovery utilities
 - 🛡️ Assert functions
@@ -50,12 +51,32 @@ import "github.com/difof/errors"
 
 func main() {
     if err := riskyOperation(); err != nil {
-        fmt.Println(err.Error()) // Prints beautiful stacktrace
+        fmt.Println(err.Error())               // Full-detail stack-aware output
+        fmt.Println(errors.ChainMessages(err)) // Stackless wrapped messages
+        fmt.Println(errors.RootMessage(err))   // Innermost/root message
     }
 }
 
 func riskyOperation() error {
     return errors.New("something went wrong")
+}
+```
+
+## Message Rendering
+
+Use the default `Error()` / formatter APIs when you want diagnostics with source
+locations, and the message helpers when you only want plain wrapped text.
+
+```go
+func createUser() error {
+    err := fmt.Errorf("db write failed: %w", errors.New("connection reset"))
+    err = errors.Wrapf(err, "create user")
+
+    fmt.Println(err.Error())               // full-detail stack-aware output
+    fmt.Println(errors.ChainMessages(err)) // create user: db write failed: connection reset
+    fmt.Println(errors.RootMessage(err))   // connection reset
+
+    return err
 }
 ```
 

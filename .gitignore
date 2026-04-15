@@ -24,3 +24,4 @@ go.work
 .task
 
 TODO.md
+.gocache

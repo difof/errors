@@ -67,6 +67,10 @@ func riskyOperation() error {
 Use the default `Error()` / formatter APIs when you want diagnostics with source
 locations, and the message helpers when you only want plain wrapped text.
 
+- `err.Error()` gives you the full stack-aware debug view
+- `errors.ChainMessages(err)` gives you `%w`-style wrapped text without source info
+- `errors.RootMessage(err)` gives you the final underlying message only
+
 ```go
 func createUser() error {
     err := fmt.Errorf("db write failed: %w", errors.New("connection reset"))
@@ -79,6 +83,40 @@ func createUser() error {
     return err
 }
 ```
+
+## Demo
+
+Run the bundled showcase:
+
+```bash
+task demo
+```
+
+No flags shows everything for every demo case:
+
+- full-detail stack-aware output
+- wrapped-message-only output via `errors.ChainMessages(err)`
+- root-message-only output via `errors.RootMessage(err)`
+- colored/JSON/YAML formatter views
+- multiple scenarios, including package-only wraps, mixed `%w` wraps, and joined errors
+
+Use flags to focus the showcase:
+
+```bash
+task demo -- -chain -root
+task demo -- -full
+task demo -- -color
+task demo -- -json -yaml
+```
+
+Available flags:
+
+- `-full` full stack-aware text output
+- `-chain` stackless wrapped-message output
+- `-root` innermost/root message only
+- `-color` colored formatter output
+- `-json` JSON formatter output
+- `-yaml` YAML formatter output
 
 ## 🤝 Contributing
 

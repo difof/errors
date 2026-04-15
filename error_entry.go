@@ -64,7 +64,11 @@ func Collapse(err error) (entries []ErrorEntry) {
 	frames := runtime.CallersFrames(pcbuf)
 
 	i := 0
-	for frame, _ := frames.Next(); frame.PC != 0; frame, _ = frames.Next() {
+	for frame, more := frames.Next(); i < len(entriesWithPC); frame, more = frames.Next() {
+		if !more {
+			break
+		}
+
 		entryIndex := entriesWithPC[i]
 		i++
 

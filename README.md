@@ -62,28 +62,6 @@ func riskyOperation() error {
 }
 ```
 
-## Message Rendering
-
-Use the default `Error()` / formatter APIs when you want diagnostics with source
-locations, and the message helpers when you only want plain wrapped text.
-
-- `err.Error()` gives you the full stack-aware debug view
-- `errors.ChainMessages(err)` gives you `%w`-style wrapped text without source info
-- `errors.RootMessage(err)` gives you the final underlying message only
-
-```go
-func createUser() error {
-    err := fmt.Errorf("db write failed: %w", errors.New("connection reset"))
-    err = errors.Wrapf(err, "create user")
-
-    fmt.Println(err.Error())               // full-detail stack-aware output
-    fmt.Println(errors.ChainMessages(err)) // create user: db write failed: connection reset
-    fmt.Println(errors.RootMessage(err))   // connection reset
-
-    return err
-}
-```
-
 ## Demo
 
 Run the bundled showcase:
@@ -117,6 +95,127 @@ Available flags:
 - `-color` colored formatter output
 - `-json` JSON formatter output
 - `-yaml` YAML formatter output
+
+## Basic Usage
+
+### `New` / `Newf`
+
+Create a new error with source location metadata attached.
+
+```go
+func loadConfig(path string) error {
+    if path == "" {
+        return errors.New("config path is empty")
+    }
+
+    return errors.Newf("config file %q is invalid", path)
+}
+```
+
+### `Wrap` / `Wrapf`
+
+Wrap an existing error to add context while keeping the original cause.
+
+```go
+func saveUser(user User) error {
+    if err := writeUser(user); err != nil {
+        return errors.Wrapf(err, "save user %d", user.ID)
+    }
+
+    return nil
+}
+```
+
+### `WrapResult` / `WrapResultf`
+
+Use result-aware wrap helpers when you want to return the value unchanged while
+adding error context.
+
+```go
+func parsePort(raw string) (int, error) {
+    port, err := strconv.Atoi(raw)
+    return errors.WrapResultf(port, err)("parse port %q", raw)
+}
+```
+
+### `Catch` / `Catchf`
+
+Use `Catch` helpers as compact return helpers near the end of a function.
+
+```go
+func deleteUser(id int) error {
+    err := repo.Delete(id)
+    return errors.Catchf(err, "delete user %d", id)
+}
+```
+
+### `CatchResult` / `CatchResultf` / `IgnoreResult`
+
+Use result-aware catch helpers when a function returns a value and an error.
+
+```go
+func closeRows(rows *sql.Rows) error {
+    return errors.CatchResult(rows, nil)(func(rows *sql.Rows) error {
+        return rows.Close()
+    })
+}
+
+func loadUser(id int) error {
+    rows, err := db.Query("SELECT * FROM users WHERE id = ?", id)
+    return errors.CatchResultf(rows, err)(
+        errors.IgnoreResult[*sql.Rows](),
+        "query user %d",
+        id,
+    )
+}
+```
+
+### `Recover`
+
+Convert panics into returned errors, especially when using `Must`.
+
+```go
+func loadSettings() (err error) {
+    defer errors.Recover(&err)
+
+    cfg := errors.MustResult(readConfig())
+    errors.Must(validateConfig(cfg))
+
+    return nil
+}
+```
+
+### `Must` / `MustResult`
+
+Use `Must` helpers when failure should panic and be handled by a higher-level
+`Recover`.
+
+```go
+func bootstrap() (err error) {
+    defer errors.Recover(&err)
+
+    conn := errors.MustResult(openConnection())
+    errors.Must(ping(conn))
+
+    return nil
+}
+```
+
+### Message Helpers
+
+Use message helpers when you want plain text instead of full stack-aware output.
+
+```go
+func handler() error {
+    err := errors.Wrapf(errors.New("permission denied"), "update account")
+
+    log.Println(err.Error())               // detailed output with source locations
+    log.Println(errors.ChainMessages(err)) // update account: permission denied
+    log.Println(errors.RootMessage(err))   // permission denied
+
+    return err
+}
+```
 
 ## 🤝 Contributing
 

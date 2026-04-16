@@ -1,8 +1,6 @@
 package errors
 
-import (
-	goerrors "errors"
-)
+import goerrors "errors"
 
 func test_util_createErrorChain(depth int, rootIsStdError bool) error {
 	var err error = New("root cause error")
@@ -19,4 +17,3 @@ func test_util_createErrorChain(depth int, rootIsStdError bool) error {
 
 	return err
 }
-

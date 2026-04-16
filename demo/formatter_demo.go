@@ -177,4 +177,3 @@ func printOutputBlock(title, body string) {
 	fmt.Println(body)
 	fmt.Println()
 }
-

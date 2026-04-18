@@ -77,7 +77,8 @@ func WrapSkip(skip int, err error) error {
 		return nil
 	}
 
-	return newErrorChain(getCallerPC(skip), err, "")
+	node := newErrorNode(getCallerPC(skip), "")
+	return newErrorChain(node, err)
 }
 
 // WrapSkipf creates a new formatted error wrapping an existing error,
@@ -93,5 +94,6 @@ func WrapSkipf(skip int, err error, format string, params ...any) error {
 		return nil
 	}
 
-	return newErrorChain(getCallerPC(skip), err, format, params...)
+	node := newErrorNode(getCallerPC(skip), format, params...)
+	return newErrorChain(node, err)
 }

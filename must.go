@@ -2,9 +2,8 @@ package errors
 
 import "fmt"
 
-// MustResult panics if the error is not nil, otherwise returns the result.
-// This is useful for operations that shouldn't fail during normal execution.
-// Use Recover to catch the panic.
+// MustResult returns r when err is nil and panics with a wrapped error otherwise.
+// It is commonly paired with Recover at a higher boundary.
 //
 // Example:
 //
@@ -14,8 +13,7 @@ func MustResult[T any](r T, err error) T {
 	return r
 }
 
-// MustResultf returns a formatter function that panics with a formatted message
-// if the error is not nil, otherwise returns the result.
+// MustResultf is like MustResult but adds formatted context to the panic value.
 //
 // Example:
 //
@@ -27,9 +25,7 @@ func MustResultf[T any](r T, err error) func(format string, params ...any) T {
 	}
 }
 
-// MustResult2 panics if the error is not nil, otherwise returns both results.
-// This is useful for operations that return two values and shouldn't fail
-// during normal execution.
+// MustResult2 returns both values when err is nil and panics otherwise.
 //
 // Example:
 //
@@ -39,8 +35,7 @@ func MustResult2[A, B any](a A, b B, err error) (A, B) {
 	return a, b
 }
 
-// MustResult2f returns a formatter function that panics with a formatted message
-// if the error is not nil, otherwise returns both results.
+// MustResult2f is like MustResult2 but adds formatted context to the panic value.
 //
 // Example:
 //
@@ -52,8 +47,7 @@ func MustResult2f[A, B any](a A, b B, err error) func(format string, params ...a
 	}
 }
 
-// Must panics if the error is not nil.
-// This is useful for operations that shouldn't fail during normal execution.
+// Must panics with a wrapped error when err is not nil.
 //
 // Example:
 //
@@ -62,7 +56,7 @@ func Must(err error) {
 	mayPanicf(1, err, "")
 }
 
-// Mustf panics with a formatted message if the error is not nil.
+// Mustf is like Must but adds formatted context to the panic value.
 //
 // Example:
 //
@@ -73,8 +67,7 @@ func Mustf(err error) func(format string, params ...any) {
 	}
 }
 
-// Ignore returns the first result and ignores the error.
-// Use with caution as this function deliberately ignores error handling.
+// Ignore returns r and discards the accompanying error.
 //
 // Example:
 //
@@ -83,8 +76,7 @@ func Ignore[T any](r T, _ error) T {
 	return r
 }
 
-// Assert panics with the given message if the condition is false.
-// This is useful for checking invariants that must be true.
+// Assert panics with message when truth is false.
 //
 // Example:
 //
@@ -95,8 +87,7 @@ func Assert(truth bool, message string) {
 	}
 }
 
-// Assertf panics with a formatted message if the condition is false.
-// This is useful for checking invariants that must be true.
+// Assertf panics with a formatted message when truth is false.
 //
 // Example:
 //

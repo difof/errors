@@ -5,6 +5,12 @@ import (
 	"runtime"
 )
 
+// Expand converts package-native error nodes into a resolved tree.
+//
+// Foreign errors, including stdlib wrappers and stdlib joins, are treated as
+// opaque leaves for now. This intentionally preserves their original text,
+// especially for fmt.Errorf calls with multiple %w operands where rebuilding the
+// tree from Unwrap() []error would lose wrapper-local formatting.
 func Expand(err error) *ErrorEntry {
 	lazyFrames, entryRoot := expandNode([]lazyFrame{}, err)
 	resolveFrames(lazyFrames)

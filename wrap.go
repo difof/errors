@@ -35,7 +35,7 @@ func WrapResultf[T any](r T, err error) func(format string, params ...any) (T, e
 			return r, nil
 		}
 
-		return r, WrapSkipf(3, err, format, params...)
+		return r, WrapSkipf(2, err, format, params...)
 	}
 }
 

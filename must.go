@@ -9,7 +9,7 @@ import "fmt"
 //
 //	user := errors.MustResult(db.GetUser(id))
 func MustResult[T any](r T, err error) T {
-	mayPanicf(1, err, "")
+	mayPanicf(2, err, "")
 	return r
 }
 
@@ -31,7 +31,7 @@ func MustResultf[T any](r T, err error) func(format string, params ...any) T {
 //
 //	key, value := errors.MustResult2(cache.Get("mykey"))
 func MustResult2[A, B any](a A, b B, err error) (A, B) {
-	mayPanicf(1, err, "")
+	mayPanicf(2, err, "")
 	return a, b
 }
 
@@ -53,7 +53,7 @@ func MustResult2f[A, B any](a A, b B, err error) func(format string, params ...a
 //
 //	errors.Must(db.Connect())
 func Must(err error) {
-	mayPanicf(1, err, "")
+	mayPanicf(2, err, "")
 }
 
 // Mustf is like Must but adds formatted context to the panic value.

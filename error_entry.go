@@ -1,86 +1,30 @@
 package errors
 
-import (
-	"fmt"
-	"runtime"
-)
+// ResolvedEntry holds the resolved, display-oriented view of one error node.
+type ResolvedEntry struct {
+	Message string `json:"message,omitempty" yaml:"message,omitempty"`
 
-// ErrorEntry is the textual representation of an error entry in the chain.
-// It is used for error formatting in text, JSON and YAML.
-type ErrorEntry struct {
-	pc       uintptr
-	Message  string `json:"message,omitempty" yaml:"message,omitempty"`
 	FuncPath string `json:"func_path,omitempty" yaml:"func_path,omitempty"`
 	FilePath string `json:"file_path,omitempty" yaml:"file_path,omitempty"`
 	Line     int    `json:"line,omitempty" yaml:"line,omitempty"`
+
+	Foreign bool `json:"foreign,omitempty" yaml:"foreign,omitempty"`
+	Multi   bool `json:"multi,omitempty" yaml:"multi,omitempty"`
 }
 
-// Collapse unwraps all the errors in the chain (either ErrorChain or standard error)
-// and returns a slice of ErrorEntry with string representation of the error
-// and the stacktrace.
-//
-// Note that any ErrorChain wrapped by fmt.Errorf will have formatting issues in
-// color, JSON, YAML and any other custom formatters because of the way go's
-// standard errors package unwraps errors into strings.
-//
-// You can use HasErrorChain to check if the error contains an ErrorChain for
-// appropriate error handling.
-func Collapse(err error) (entries []ErrorEntry) {
-	entries = []ErrorEntry{}
+// ErrorEntry is the textual representation of an error entry in the expanded tree.
+// It is used for error formatting in text, JSON and YAML.
+type ErrorEntry struct {
+	Resolved ResolvedEntry
+	Children []*ErrorEntry
+}
 
-	for current := err; current != nil; {
-		if ec, ok := current.(*ErrorChain); ok {
-			msg := ec.format
-			if len(ec.params) > 0 {
-				msg = fmt.Sprintf(ec.format, ec.params...)
-			}
-
-			entries = append(entries, ErrorEntry{
-				Message: msg,
-				pc:      ec.pc,
-			})
-
-			current = ec.inner
-		} else {
-			entries = append(entries, ErrorEntry{
-				Message: current.Error(),
-			})
-
-			current = nil
-		}
+// newErrorEntry creates an ErrorEntry with an initialized child slice.
+func newErrorEntry(message string) *ErrorEntry {
+	return &ErrorEntry{
+		Children: []*ErrorEntry{},
+		Resolved: ResolvedEntry{
+			Message: message,
+		},
 	}
-
-	elen := len(entries)
-	pcbuf := make([]uintptr, 0, elen)
-	entriesWithPC := make([]int, 0, elen)
-
-	for i, entry := range entries {
-		if entry.pc != 0 {
-			pcbuf = append(pcbuf, entry.pc)
-			entriesWithPC = append(entriesWithPC, i)
-		}
-	}
-
-	frames := runtime.CallersFrames(pcbuf)
-
-	i := 0
-	for frame, more := frames.Next(); i < len(entriesWithPC); frame, more = frames.Next() {
-		if !more {
-			break
-		}
-
-		entryIndex := entriesWithPC[i]
-		i++
-
-		entries[entryIndex].FilePath = frame.File
-		entries[entryIndex].Line = frame.Line
-		entries[entryIndex].FuncPath = frame.Function
-	}
-
-	// reverse the entries
-	for i, j := 0, len(entries)-1; i < j; i, j = i+1, j-1 {
-		entries[i], entries[j] = entries[j], entries[i]
-	}
-
-	return
 }

@@ -5,17 +5,46 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/difof/errors)](https://golang.org/dl/)
 
-A powerful drop-in replacement for Go's standard error handling with rich features:
-- 📍 Stacktraces with source locations
-- 🎯 Error wrapping with context
-- 📝 Stackless message helpers
-- 🔄 Error catching and result handling
-- ⚡ Panic recovery utilities
-- 🛡️ Assert functions
-- 🎨 Formatted error messages
-- 🎁 Quality of life error handling helpers
+`errors` is a higher-level error handling package for Go.
 
-## 📦 Installation
+It is not trying to replace the standard library. It is for the codebases where
+plain `fmt.Errorf("...: %w", err)` everywhere starts to feel thin: you want
+consistent callsite-aware errors, better wrapping helpers, panic-to-error flow,
+and a readable stacktrace view when things go sideways.
+
+The package gives you a structured error tree for package-owned errors, plus
+small utilities that make the usual boring error plumbing less annoying:
+
+- `New`, `Wrap`, `Join`
+- `Catch`, `CatchResult`
+- `Must`, `MustResult`, `Recover`
+- `Stacktrace`
+
+Why use it instead of raw stdlib errors alone?
+
+Because most projects end up reinventing the same patterns anyway. The stdlib
+version of a setup flow usually turns into a staircase of `if err != nil`
+checks. Here you can write the same thing more directly:
+
+```go
+func bootstrap() (err error) {
+	defer errors.Recover(&err)
+
+	errors.Must(someFunc())
+
+	r := errors.MustResult(someResultingFunc())
+	_ = r
+
+	return 
+}
+```
+
+It still plays fine with stdlib errors, but it is opinionated about one thing:
+package-owned errors are fully structured, stdlib-created errors are treated as
+opaque text during expansion. That keeps `fmt.Errorf` and `errors.Join` output
+intact instead of trying to reverse-engineer formatting that Go does not expose.
+
+## Installation
 
 Requires Go 1.21 or higher.
 
@@ -23,44 +52,44 @@ Requires Go 1.21 or higher.
 go get github.com/difof/errors
 ```
 
-## 🏗️ Building from Source
-
-```bash
-# Clone the repository
-git clone https://github.com/difof/errors.git
-cd errors
-
-# Install task (if not already installed)
-go install github.com/go-task/task/v3/cmd/task@latest
-# Or go to https://taskfile.dev/installation
-
-# Run tests
-task test
-
-# Run benchmarks
-task bench
-
-# Run demo
-task demo
-```
-
-## 🚀 Quick Start
+## Quick Start
 
 ```go
-import "github.com/difof/errors"
+package main
+
+import (
+	"fmt"
+
+	"github.com/difof/errors"
+)
 
 func main() {
-    if err := riskyOperation(); err != nil {
-        fmt.Println(err.Error())               // Full-detail stack-aware output
-        fmt.Println(errors.ChainMessages(err)) // Stackless wrapped messages
-        fmt.Println(errors.RootMessage(err))   // Innermost/root message
-    }
+	err := saveUser(42)
+	if err == nil {
+		return
+	}
+
+	fmt.Println(err.Error())
+	fmt.Println(errors.Stacktrace(err, errors.StacktraceWithTrimFilePath(true)))
 }
 
-func riskyOperation() error {
-    return errors.New("something went wrong")
+func saveUser(id int) error {
+	return errors.Wrapf(errors.New("disk offline"), "save user %d", id)
 }
 ```
+
+Typical output shape:
+
+```text
+save user 42: disk offline
+
+disk offline
+| at main.go:main.saveUser:18
+| at main.go:main.saveUser:18: save user 42
+```
+
+The first line is the normal error string you can return, compare, or log. The
+second view is the debugging view.
 
 ## Demo
 
@@ -70,157 +99,205 @@ Run the bundled showcase:
 task demo
 ```
 
-No flags shows everything for every demo case:
-
-- full-detail stack-aware output
-- wrapped-message-only output via `errors.ChainMessages(err)`
-- root-message-only output via `errors.RootMessage(err)`
-- colored/JSON/YAML formatter views
-- multiple scenarios, including package-only wraps, mixed `%w` wraps, and joined errors
-
-Use flags to focus the showcase:
+Or run it directly:
 
 ```bash
-task demo -- -chain -root
-task demo -- -full
-task demo -- -color
-task demo -- -json -yaml
+go run ./demo
 ```
 
-Available flags:
+By default the demo shows, for each scenario:
 
-- `-full` full stack-aware text output
-- `-chain` stackless wrapped-message output
-- `-root` innermost/root message only
-- `-color` colored formatter output
-- `-json` JSON formatter output
-- `-yaml` YAML formatter output
+- the code used to construct the error
+- the normal `Error()` output
+- the plain stacktrace view
+- the colored stacktrace view
+
+Useful flags:
+
+```bash
+go run ./demo -error
+go run ./demo -stacktrace
+go run ./demo -color
+go run ./demo -full
+```
+
+`-full` is just a convenience alias for the plain stacktrace view.
+
+The demo includes package-only chains, package joins, stdlib joins wrapped by
+package errors, and mixed `fmt.Errorf` / `errors.Join` scenarios so you can see
+exactly where the package is structured and where stdlib errors stay opaque.
 
 ## Basic Usage
 
 ### `New` / `Newf`
 
-Create a new error with source location metadata attached.
+Use `New` when you want a real package-owned error node with callsite metadata.
 
 ```go
 func loadConfig(path string) error {
-    if path == "" {
-        return errors.New("config path is empty")
-    }
+	if path == "" {
+		return errors.New("config path is empty")
+	}
 
-    return errors.Newf("config file %q is invalid", path)
+	return errors.Newf("config file %q is invalid", path)
 }
 ```
 
 ### `Wrap` / `Wrapf`
 
-Wrap an existing error to add context while keeping the original cause.
+Use `Wrap` to add context without flattening the original cause into a dead
+string.
 
 ```go
 func saveUser(user User) error {
-    if err := writeUser(user); err != nil {
-        return errors.Wrapf(err, "save user %d", user.ID)
-    }
+	if err := writeUser(user); err != nil {
+		return errors.Wrapf(err, "save user %d", user.ID)
+	}
 
-    return nil
+	return nil
+}
+```
+
+### `Join`
+
+Use `Join` when you actually have multiple errors and want them to stay multiple.
+
+```go
+func shutdown() error {
+	return errors.Join(
+		stopHTTP(),
+		stopWorkers(),
+		flushMetrics(),
+	)
 }
 ```
 
 ### `WrapResult` / `WrapResultf`
 
-Use result-aware wrap helpers when you want to return the value unchanged while
-adding error context.
+Useful when you want to keep the returned value untouched and only wrap the
+error.
 
 ```go
 func parsePort(raw string) (int, error) {
-    port, err := strconv.Atoi(raw)
-    return errors.WrapResultf(port, err)("parse port %q", raw)
+	port, err := strconv.Atoi(raw)
+	return errors.WrapResultf(port, err)("parse port %q", raw)
 }
 ```
 
 ### `Catch` / `Catchf`
 
-Use `Catch` helpers as compact return helpers near the end of a function.
+Good near the bottom of a function when you just want “return this error with
+context if it exists”.
 
 ```go
 func deleteUser(id int) error {
-    err := repo.Delete(id)
-    return errors.Catchf(err, "delete user %d", id)
+	err := repo.Delete(id)
+	return errors.Catchf(err, "delete user %d", id)
 }
 ```
 
-### `CatchResult` / `CatchResultf` / `IgnoreResult`
+### `CatchResult` / `CatchResultf`
 
-Use result-aware catch helpers when a function returns a value and an error.
+These are handy when a function returns `(value, error)` and you want to handle
+the success path inline without losing the error path.
 
 ```go
-func closeRows(rows *sql.Rows) error {
-    return errors.CatchResult(rows, nil)(func(rows *sql.Rows) error {
-        return rows.Close()
-    })
-}
-
 func loadUser(id int) error {
-    rows, err := db.Query("SELECT * FROM users WHERE id = ?", id)
-    return errors.CatchResultf(rows, err)(
-        errors.IgnoreResult[*sql.Rows](),
-        "query user %d",
-        id,
-    )
+	rows, err := db.Query("SELECT * FROM users WHERE id = ?", id)
+	return errors.CatchResultf(rows, err)(func(rows *sql.Rows) error {
+		defer rows.Close()
+		return scanUser(rows)
+	}, "query user %d", id)
 }
 ```
 
-### `Recover`
+### `Must` / `MustResult` / `Recover`
 
-Convert panics into returned errors, especially when using `Must`.
-
-```go
-func loadSettings() (err error) {
-    defer errors.Recover(&err)
-
-    cfg := errors.MustResult(readConfig())
-    errors.Must(validateConfig(cfg))
-
-    return nil
-}
-```
-
-### `Must` / `MustResult`
-
-Use `Must` helpers when failure should panic and be handled by a higher-level
-`Recover`.
+This combo is for flows where panicking locally and converting back to an error
+at the boundary is cleaner than threading checks through every line.
 
 ```go
 func bootstrap() (err error) {
-    defer errors.Recover(&err)
+	defer errors.Recover(&err)
 
-    conn := errors.MustResult(openConnection())
-    errors.Must(ping(conn))
+	conn := errors.MustResult(openConnection())
+	errors.Must(ping(conn))
 
-    return nil
+	return nil
 }
 ```
 
-### Message Helpers
+That style is not for every function, but in setup code, orchestration code, or
+batch flows it can make the happy path much easier to read.
 
-Use message helpers when you want plain text instead of full stack-aware output.
+## Stacktrace
+
+`Stacktrace` is the human-facing debug view. It renders package-owned chains and
+joins structurally and lets you tune the output shape.
 
 ```go
-func handler() error {
-    err := errors.Wrapf(errors.New("permission denied"), "update account")
-
-    log.Println(err.Error())               // detailed output with source locations
-    log.Println(errors.ChainMessages(err)) // update account: permission denied
-    log.Println(errors.RootMessage(err))   // permission denied
-
-    return err
-}
+trace := errors.Stacktrace(
+	err,
+	errors.StacktraceWithTrimFilePath(true),
+	errors.StacktraceWithSuppressEmptyFrames(true),
+	errors.StacktraceWithTreePrefix("|"),
+)
 ```
 
-## 🤝 Contributing
+There are options for indentation, colors, branch labels, tree prefixes, file
+path trimming, function formatting, and suppressing empty frame lines.
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+## Stdlib Interop
 
-## 📄 License
+This package works with stdlib errors, but it does not try to pretend that all
+stdlib errors are structurally recoverable.
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Current rule of thumb:
+
+- package errors wrapping stdlib errors: package nodes stay structured, stdlib
+  children remain opaque
+- stdlib errors wrapping package errors: the outer stdlib wrapper is treated as
+  opaque text
+
+That means:
+
+```go
+errors.Wrapf(fmt.Errorf("outer: %w", err), "save user")
+```
+
+keeps `save user` as a package-owned node, but the `fmt.Errorf` part stays a
+foreign leaf.
+
+And:
+
+```go
+fmt.Errorf("outer std: %w", errors.Join(a, b))
+```
+
+is treated as one opaque stdlib wrapper, even though the inner value is a
+package error tree.
+
+That is intentional. Go exposes `Unwrap() []error` for multi-wrap `fmt.Errorf`,
+but it does not expose the wrapper-local formatting in a way that lets this
+package rebuild the tree without risking broken or misleading output. Better to
+keep stdlib-created formatting intact than fake precision.
+
+There is a longer note on that tradeoff in [`STDLIB-INTEROP.md`](STDLIB-INTEROP.md).
+
+## Building from Source
+
+```bash
+git clone https://github.com/difof/errors.git
+cd errors
+task test
+task demo
+```
+
+## Contributing
+
+Contributions are welcome. If the package is useful to you and you have a clean
+idea to improve it, send a PR.
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.

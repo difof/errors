@@ -1,7 +1,6 @@
 package errors
 
-// Wrap wraps an existing error with stack trace information.
-// The wrapped error will include the source location where Wrap was called.
+// Wrap adds a package-owned callsite above err.
 //
 // Example:
 //
@@ -9,19 +8,10 @@ package errors
 //	    return errors.Wrap(err)
 //	}
 func Wrap(err error) error {
-	// there are two scenarios:
-	// 1. err is an ErrorChain
-	// 2. err is a standard error
-	//
-	// if err is an ErrorChain, simply set it as next error
-	// if err is a standard error:
-	// - unwrap loop until we get to the root error
-	// - create no-pc error chains at each unwrap step
-	return WrapSkip(1, err)
+	return WrapSkip(2, err)
 }
 
-// WrapResult wraps an existing error and returns both the result and the error.
-// Useful for last function calls that return a result and an error.
+// WrapResult returns r unchanged and wraps err when err is not nil.
 //
 // Example:
 //
@@ -31,12 +21,10 @@ func WrapResult[T any](r T, err error) (T, error) {
 		return r, nil
 	}
 
-	return r, WrapSkip(1, err)
+	return r, WrapSkip(2, err)
 }
 
-// WrapResultf returns a formatter function that wraps an existing error and returns both the result and the error.
-//
-// The formatter function can be used to format the error message before returning it.
+// WrapResultf is like WrapResult but delays the formatted context until the returned closure is called.
 //
 // Example:
 //
@@ -51,47 +39,31 @@ func WrapResultf[T any](r T, err error) func(format string, params ...any) (T, e
 	}
 }
 
-// Wrapf creates a new formatted error that wraps an existing error.
-// The new error message is formatted according to format and params.
-//
-// Parameters:
-//   - inner: the error to wrap
-//   - format: format string for the new error message
-//   - params: arguments for the format string
+// Wrapf adds formatted context above err.
 //
 // Example:
 //
 //	return errors.Wrapf(err, "failed to process user %s", username)
 func Wrapf(inner error, format string, params ...any) error {
-	return WrapSkipf(1, inner, format, params...)
+	return WrapSkipf(2, inner, format, params...)
 }
 
-// WrapSkip wraps an existing error, skipping the specified number
-// of stack frames when recording the source location.
-//
-// Parameters:
-//   - skip: number of stack frames to skip
-//   - err: the error to wrap
+// WrapSkip is like Wrap but skips additional stack frames before recording the callsite.
 func WrapSkip(skip int, err error) error {
 	if err == nil {
 		return nil
 	}
 
-	return newErrorChain(getCallerPC(skip+1), err, "")
+	node := newErrorNode(getCallerPC(skip), "")
+	return newErrorChain(node, err)
 }
 
-// WrapSkipf creates a new formatted error wrapping an existing error,
-// skipping the specified number of stack frames when recording the source location.
-//
-// Parameters:
-//   - skip: number of stack frames to skip
-//   - err: the error to wrap
-//   - format: format string for the new error message
-//   - params: arguments for the format string
+// WrapSkipf is like Wrapf but skips additional stack frames before recording the callsite.
 func WrapSkipf(skip int, err error, format string, params ...any) error {
 	if err == nil && format == "" {
 		return nil
 	}
 
-	return newErrorChain(getCallerPC(skip+1), err, format, params...)
+	node := newErrorNode(getCallerPC(skip), format, params...)
+	return newErrorChain(node, err)
 }

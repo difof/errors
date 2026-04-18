@@ -1,69 +1,71 @@
 package errors
 
 import (
-	goerrors "errors"
+	stderrors "errors"
 	"testing"
 )
 
-func TestRecoverHelpers(t *testing.T) {
-	t.Run("recoverError nil", func(t *testing.T) {
-		if err := recoverError(nil, 0); err != nil {
-			t.Fatalf("recoverError(nil) = %v, want nil", err)
-		}
-	})
+func TestRecoverWrapsNonErrorPanics(t *testing.T) {
+	err := func() (err error) {
+		defer Recover(&err)
+		panic("boom")
+	}()
 
-	t.Run("recoverError returns error panic as is", func(t *testing.T) {
-		boom := goerrors.New("boom")
-		if err := recoverError(boom, 0); !goerrors.Is(err, boom) {
-			t.Fatalf("recoverError(error) = %v, want original error", err)
-		}
-	})
+	if err == nil {
+		t.Fatal("Recover returned nil error")
+	}
 
-	t.Run("recoverError wraps non-error panic", func(t *testing.T) {
-		err := recoverError("boom", 0)
-		if got := RootMessage(err); got != "boom" {
-			t.Fatalf("RootMessage(recoverError(...)) = %q, want %q", got, "boom")
-		}
-	})
+	if got := err.Error(); got != "boom" {
+		t.Fatalf("Error() = %q, want %q", got, "boom")
+	}
 
-	t.Run("Recover ignores nil error pointer", func(t *testing.T) {
-		func() {
-			defer Recover(nil)
-		}()
-	})
+	entry := Expand(err)
+	if entry == nil || entry.Resolved.Foreign {
+		t.Fatalf("Expand(Recover string panic) = %#v, want package-owned entry", entry)
+	}
+}
 
-	t.Run("Recover captures panic error", func(t *testing.T) {
-		var err error
-		func() {
-			defer Recover(&err)
-			panic(goerrors.New("boom"))
-		}()
-		if got := RootMessage(err); got != "boom" {
-			t.Fatalf("RootMessage(Recover) = %q, want %q", got, "boom")
-		}
-	})
+func TestRecoverFnReceivesRecoveredError(t *testing.T) {
+	boom := stderrors.New("boom")
+	var got error
 
-	t.Run("Recover wraps non-error panic", func(t *testing.T) {
-		var err error
-		func() {
-			defer Recover(&err)
-			panic("boom")
-		}()
-		if got := RootMessage(err); got != "boom" {
-			t.Fatalf("RootMessage(Recover string panic) = %q, want %q", got, "boom")
-		}
-	})
+	func() {
+		defer RecoverFn(func(err error) {
+			got = err
+		})
+		panic(boom)
+	}()
 
-	t.Run("RecoverFn captures panic", func(t *testing.T) {
-		var gotErr error
-		func() {
-			defer RecoverFn(func(err error) {
-				gotErr = err
-			})
-			panic(goerrors.New("boom"))
-		}()
-		if got := RootMessage(gotErr); got != "boom" {
-			t.Fatalf("RootMessage(RecoverFn) = %q, want %q", got, "boom")
+	if !stderrors.Is(got, boom) {
+		t.Fatalf("RecoverFn received %v, want wrapped original error", got)
+	}
+}
+
+func TestRecoverNilPointerLeavesPanicUntouched(t *testing.T) {
+	boom := stderrors.New("boom")
+
+	defer func() {
+		if got := recover(); got != boom {
+			t.Fatalf("recover() = %v, want original panic %v", got, boom)
 		}
-	})
+	}()
+
+	func() {
+		defer Recover(nil)
+		panic(boom)
+	}()
+}
+
+func TestRecoverFnDoesNotCallCallbackWithoutPanic(t *testing.T) {
+	called := false
+
+	func() {
+		defer RecoverFn(func(err error) {
+			called = true
+		})
+	}()
+
+	if called {
+		t.Fatal("RecoverFn callback was called without panic")
+	}
 }

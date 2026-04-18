@@ -39,9 +39,7 @@ func Join(errors ...error) error {
 	if n == 1 {
 		for _, err := range errors {
 			if err != nil {
-				if _, ok := IsUnwrapMulti(err); ok {
-					return err
-				}
+				return err
 			}
 		}
 	}

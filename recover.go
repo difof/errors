@@ -1,7 +1,6 @@
 package errors
 
-// recoverError handles panic recovery and converts the recovered value into an error.
-// skipFrames specifies how many stack frames to skip when creating a new error.
+// recoverError converts a recovered panic value into an error.
 func recoverError(r any, skipFrames int) error {
 	if r == nil {
 		return nil
@@ -13,14 +12,14 @@ func recoverError(r any, skipFrames int) error {
 	return NewSkipf(skipFrames, "%v", r)
 }
 
-// Recover recovers from panic and sets the error pointer to the recovered error.
-// If the recovered value is not an error, it will be wrapped in a new error.
+// Recover turns a panic into an error stored in errp.
+// If the recovered value is not already an error, Recover wraps it in a new
+// package-owned error.
 //
-// This function is typically used in a defer statement to handle panics and
-// convert them to errors that can be returned from the function, specially
-// in combination with Must.
+// Recover is typically used in a deferred call at a function boundary, often in
+// combination with Must helpers.
 //
-// The error pointer should not be nil, otherwise the function returns and does nothing. 
+// A nil error pointer is ignored.
 //
 // Example:
 //
@@ -39,14 +38,8 @@ func Recover(errp *error) {
 	}
 }
 
-// RecoverFn recovers from panic and calls the given function with the recovered error.
-// If the recovered value is not an error, it will be wrapped in a new error.
-//
-// This function provides more flexibility than Recover by allowing custom error
-// handling through a callback function.
-//
-// Parameters:
-//   - fn: callback function that will be called with the recovered error
+// RecoverFn is like Recover but passes the recovered error to fn instead of
+// storing it through an error pointer.
 //
 // Example:
 //

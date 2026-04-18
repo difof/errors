@@ -47,3 +47,11 @@ func TestErrorChainUnwrap(t *testing.T) {
 		t.Fatalf("Unwrap() = %v, want %v", got, leaf)
 	}
 }
+
+func TestErrorChainErrorAllowsEmptyLeafMessage(t *testing.T) {
+	chain := newErrorChain(newErrorNode(0, ""), nil)
+
+	if got := chain.Error(); got != "" {
+		t.Fatalf("Error() = %q, want empty string", got)
+	}
+}

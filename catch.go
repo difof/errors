@@ -46,13 +46,13 @@ func IgnoreResult[R any]() func(R) error { return func(R) error { return nil } }
 func CatchResult[R any](result R, err error) func(callback func(R) error) error {
 	if err != nil {
 		return func(f func(result R) error) error {
-			return WrapSkip(3, err)
+			return WrapSkip(2, err)
 		}
 	}
 
 	return func(f func(result R) error) (err error) {
 		if err = f(result); err != nil {
-			return WrapSkip(3, err)
+			return WrapSkip(2, err)
 		}
 
 		return
@@ -71,13 +71,13 @@ func CatchResult[R any](result R, err error) func(callback func(R) error) error 
 func CatchResultf[R any](result R, err error) func(callback func(R) error, format string, params ...any) error {
 	if err != nil {
 		return func(f func(result R) error, format string, params ...any) error {
-			return WrapSkipf(3, err, format, params...)
+			return WrapSkipf(2, err, format, params...)
 		}
 	}
 
 	return func(f func(result R) error, format string, params ...any) (err error) {
 		if err = f(result); err != nil {
-			return WrapSkipf(3, err, format, params...)
+			return WrapSkipf(2, err, format, params...)
 		}
 
 		return

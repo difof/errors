@@ -17,29 +17,26 @@ func TestStacktraceFormatsChainLeafFirstWithoutNestedFrameIndent(t *testing.T) {
 
 	got := Stacktrace(err, StacktraceWithColor(false), StacktraceWithTreePrefix(""))
 	lines := strings.Split(got, "\n")
-	if len(lines) != 5 {
-		t.Fatalf("line count = %d, want 5\n%s", len(lines), got)
+	if len(lines) != 4 {
+		t.Fatalf("line count = %d, want 4\n%s", len(lines), got)
 	}
 
+	leafPrefix := "at " + leafLocation + ": "
 	outerPrefix := "  at " + outerLocation + ": "
-	if lines[0] != "root line 1" {
-		t.Fatalf("line 1 = %q, want %q", lines[0], "root line 1")
+	if lines[0] != leafPrefix+"root line 1" {
+		t.Fatalf("line 1 = %q, want %q", lines[0], leafPrefix+"root line 1")
 	}
 
-	if lines[1] != "root line 2" {
-		t.Fatalf("line 2 = %q, want %q", lines[1], "root line 2")
+	if lines[1] != strings.Repeat(" ", len(leafPrefix))+"root line 2" {
+		t.Fatalf("line 2 = %q", lines[1])
 	}
 
-	if lines[2] != "  at "+leafLocation {
-		t.Fatalf("line 3 = %q, want %q", lines[2], "  at "+leafLocation)
+	if lines[2] != outerPrefix+"outer line 1" {
+		t.Fatalf("line 3 = %q, want %q", lines[2], outerPrefix+"outer line 1")
 	}
 
-	if lines[3] != outerPrefix+"outer line 1" {
-		t.Fatalf("line 4 = %q, want %q", lines[3], outerPrefix+"outer line 1")
-	}
-
-	if lines[4] != strings.Repeat(" ", len(outerPrefix))+"outer line 2" {
-		t.Fatalf("line 5 = %q", lines[4])
+	if lines[3] != strings.Repeat(" ", len(outerPrefix))+"outer line 2" {
+		t.Fatalf("line 4 = %q", lines[3])
 	}
 }
 
@@ -72,7 +69,7 @@ func TestStacktraceCanSuppressMessageLessFrames(t *testing.T) {
 		StacktraceWithSuppressEmptyFrames(true),
 	)
 	want := strings.Join([]string{
-		"boom",
+		"at " + leafLocation + ": boom",
 		"  at " + outerLocation + ": context",
 	}, "\n")
 
@@ -80,8 +77,25 @@ func TestStacktraceCanSuppressMessageLessFrames(t *testing.T) {
 		t.Fatalf("Stacktrace() =\n%s\nwant\n%s", got, want)
 	}
 
-	if strings.Contains(got, leafLocation) {
-		t.Fatalf("Stacktrace() still contains suppressed leaf frame %q:\n%s", leafLocation, got)
+	if strings.Count(got, leafLocation) != 1 {
+		t.Fatalf("Stacktrace() should contain exactly one leaf frame %q:\n%s", leafLocation, got)
+	}
+}
+
+func TestStacktraceCollapsesDuplicateEmptyFramesAtSameLocation(t *testing.T) {
+	err := Wrapf(Wrap(New("boom")), "context")
+	entry := Expand(err)
+	leafLocation := mustRawLocation(&entry.Children[0].Children[0].Resolved)
+	outerLocation := mustRawLocation(&entry.Resolved)
+
+	got := Stacktrace(err, StacktraceWithColor(false), StacktraceWithTreePrefix(""))
+	want := strings.Join([]string{
+		"at " + leafLocation + ": boom",
+		"  at " + outerLocation + ": context",
+	}, "\n")
+
+	if got != want {
+		t.Fatalf("Stacktrace() =\n%s\nwant\n%s", got, want)
 	}
 }
 
@@ -96,8 +110,8 @@ func TestStacktraceSuppressEmptyFramesDoesNotAddGhostDepth(t *testing.T) {
 	)
 	want := strings.Join([]string{
 		"at " + mustRawLocation(&entry.Children[0].Resolved) + ": joined errors",
-		"| [1] left",
-		"| [2] right",
+		"| [1] at " + mustRawLocation(&entry.Children[0].Children[0].Resolved) + ": left",
+		"| [2] at " + mustRawLocation(&entry.Children[0].Children[1].Resolved) + ": right",
 	}, "\n")
 
 	if got != want {
@@ -119,8 +133,7 @@ func TestStacktraceFormatsJoinedErrorsAsSiblingBranches(t *testing.T) {
 	got := Stacktrace(err, StacktraceWithIndent(4), StacktraceWithColor(false), StacktraceWithTreePrefix(""))
 	want := strings.Join([]string{
 		"at " + rootLocation + ": joined errors",
-		"    [1] left",
-		"        at " + leftLocation,
+		"    [1] at " + leftLocation + ": left",
 		"    [2] foreign: boom",
 		"    [3] right",
 		"        at " + contextLocation + ": context",
@@ -145,10 +158,8 @@ func TestStacktraceSupportsTreePrefixAndCustomBranchLabels(t *testing.T) {
 
 	wantLines := []string{
 		"at " + mustRawLocation(&entry.Resolved) + ": joined errors",
-		"| (1) left",
-		"| | at " + leftLocation,
-		"| (2) right",
-		"| | at " + rightLocation,
+		"| (1) at " + leftLocation + ": left",
+		"| (2) at " + rightLocation + ": right",
 	}
 
 	if got != strings.Join(wantLines, "\n") {
@@ -176,10 +187,8 @@ func TestStacktracePassesColorFlagToTreePrefixFormatter(t *testing.T) {
 
 	wantLines := []string{
 		"at " + mustRawLocation(&entry.Resolved) + ": joined errors",
-		"> [1] left",
-		"> > at " + leftLocation,
-		"> [2] right",
-		"> > at " + rightLocation,
+		"> [1] at " + leftLocation + ": left",
+		"> [2] at " + rightLocation + ": right",
 	}
 
 	if got != strings.Join(wantLines, "\n") {
@@ -298,10 +307,8 @@ func TestStacktraceSupportsPreIndent(t *testing.T) {
 	got := Stacktrace(err, StacktraceWithColor(false), StacktraceWithPreIndent(3))
 	want := strings.Join([]string{
 		"   at " + mustRawLocation(&entry.Resolved) + ": joined errors",
-		"   | [1] left",
-		"   | | at " + mustRawLocation(&entry.Children[0].Resolved),
-		"   | [2] right",
-		"   | | at " + mustRawLocation(&entry.Children[1].Resolved),
+		"   | [1] at " + mustRawLocation(&entry.Children[0].Resolved) + ": left",
+		"   | [2] at " + mustRawLocation(&entry.Children[1].Resolved) + ": right",
 	}, "\n")
 
 	if got != want {

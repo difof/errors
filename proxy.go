@@ -2,14 +2,11 @@ package errors
 
 import goerrors "errors"
 
-// As is a wrapper around Go's standard errors.As function,
-// so user doesn't need to import std errors package.
+// As forwards to the standard library's errors.As.
 func As(err error, target any) bool { return goerrors.As(err, target) }
 
-// Is is a wrapper around Go's standard errors.Is function,
-// so user doesn't need to import std errors package.
+// Is forwards to the standard library's errors.Is.
 func Is(err, target error) bool { return goerrors.Is(err, target) }
 
-// Unwrap is a wrapper around Go's standard errors.Unwrap function,
-// so user doesn't need to import std errors package.
+// Unwrap forwards to the standard library's errors.Unwrap.
 func Unwrap(err error) error { return goerrors.Unwrap(err) }

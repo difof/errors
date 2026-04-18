@@ -1,0 +1,105 @@
+package errors
+
+import (
+	"fmt"
+	"runtime"
+)
+
+func Expand(err error) *ErrorEntry {
+	lazyFrames, entryRoot := expandNode([]lazyFrame{}, err)
+	resolveFrames(lazyFrames)
+
+	return entryRoot
+}
+
+func expandNode(lazyFrames []lazyFrame, err error) ([]lazyFrame, *ErrorEntry) {
+	if err == nil {
+		return lazyFrames, nil
+	}
+
+	if errorChain, ok := IsErrorChain(err); ok {
+		return expandChain(lazyFrames, errorChain)
+	}
+
+	if errorTree, ok := IsErrorTree(err); ok {
+		return expandTree(lazyFrames, errorTree)
+	}
+
+	entry := newErrorEntry(err.Error())
+	entry.Resolved.Foreign = true
+	return lazyFrames, entry
+}
+
+func expandChain(lazyFrames []lazyFrame, chain *ErrorChain) ([]lazyFrame, *ErrorEntry) {
+	entry := newErrorEntry(formatNodeMessage(chain.node.format, chain.node.params))
+
+	var child *ErrorEntry
+	lazyFrames, child = expandNode(lazyFrames, chain.child)
+	if child != nil {
+		entry.Children = append(entry.Children, child)
+	}
+
+	return appendLazyFrame(lazyFrames, entry, chain.node.pc), entry
+}
+
+func expandTree(lazyFrames []lazyFrame, tree *ErrorTree) ([]lazyFrame, *ErrorEntry) {
+	entry := newErrorEntry(formatNodeMessage(tree.node.format, tree.node.params))
+	entry.Resolved.Multi = true
+
+	var child *ErrorEntry
+	for _, treeChild := range tree.children {
+		lazyFrames, child = expandNode(lazyFrames, treeChild)
+		if child != nil {
+			entry.Children = append(entry.Children, child)
+		}
+	}
+
+	return appendLazyFrame(lazyFrames, entry, tree.node.pc), entry
+}
+
+// lazyFrame is used as a slice of ErrorEntry's after expansion.
+// It is used for stack frame resolution in an optimized one shot manner.
+type lazyFrame struct {
+	pc    uintptr
+	entry *ErrorEntry
+}
+
+func newLazyFrame(entry *ErrorEntry, pc uintptr) lazyFrame {
+	return lazyFrame{pc, entry}
+}
+
+func appendLazyFrame(frames []lazyFrame, entry *ErrorEntry, pc uintptr) []lazyFrame {
+	if pc != 0 {
+		frames = append(frames, newLazyFrame(entry, pc))
+	}
+
+	return frames
+}
+
+func formatNodeMessage(format string, params []any) string {
+	return fmt.Sprintf(format, params...)
+}
+
+func resolveFrames(lazyFrames []lazyFrame) {
+	bufLen := len(lazyFrames)
+	pcBuffer := make([]uintptr, bufLen)
+
+	for i, f := range lazyFrames {
+		pcBuffer[i] = f.pc
+	}
+
+	frames := runtime.CallersFrames(pcBuffer)
+
+	i := 0
+	for frame, more := frames.Next(); i < bufLen; frame, more = frames.Next() {
+		lazyFrames[i].entry.Resolved.FilePath = frame.File
+		lazyFrames[i].entry.Resolved.FuncPath = frame.Function
+		lazyFrames[i].entry.Resolved.Line = frame.Line
+
+		i++
+
+		if !more {
+			break
+		}
+	}
+}

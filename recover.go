@@ -1,11 +1,19 @@
 package errors
 
 import (
+	"reflect"
 	"runtime"
-	"strings"
+	"sync"
 )
 
-// recoverError converts a recovered panic value into an error.
+// recoverError normalizes a recovered panic value into the package's error model.
+//
+// There are three cases:
+//  1. nil: no panic happened
+//  2. error: return it unchanged so package-owned Must/Wrap panics and foreign
+//     panic(error) values keep their original structure
+//  3. non-error: wrap it into a package-owned leaf error and recover the best
+//     caller location from the runtime stack
 func recoverError(r any) error {
 	if r == nil {
 		return nil
@@ -19,6 +27,12 @@ func recoverError(r any) error {
 	return newErrorChain(node, nil)
 }
 
+// recoverCallerPC walks the recovered stack and returns the first user frame
+// that should own a synthesized package error for a non-error panic value.
+//
+// This is only used for raw panic values like panic("boom"). Package helpers
+// such as Must already panic with a fully-formed error, so they bypass this
+// path completely.
 func recoverCallerPC() uintptr {
 	pcs := make([]uintptr, 32)
 	n := runtime.Callers(2, pcs)
@@ -29,7 +43,7 @@ func recoverCallerPC() uintptr {
 	frames := runtime.CallersFrames(pcs[:n])
 	for {
 		frame, more := frames.Next()
-		if !shouldSkipRecoverFrame(frame.Function) {
+		if !shouldSkipRecoverFrame(frame) {
 			return frame.PC
 		}
 
@@ -39,17 +53,55 @@ func recoverCallerPC() uintptr {
 	}
 }
 
-func shouldSkipRecoverFrame(function string) bool {
-	if function == "runtime.gopanic" || function == "runtime.sigpanic" {
+var (
+	// recoverSkipFrameEntries caches exact helper frame entry points that should
+	// never be reported as the recovered callsite.
+	recoverSkipFrameEntries map[uintptr]struct{}
+	// recoverSkipFrameNames covers panic helpers whose runtime frame may not match
+	// the entry-point cache exactly, but whose fully-qualified function name is
+	// still stable and precise enough to skip explicitly.
+	recoverSkipFrameNames       map[string]struct{}
+	recoverSkipFrameEntriesOnce sync.Once
+)
+
+// shouldSkipRecoverFrame reports whether a runtime frame belongs to the
+// recovery machinery rather than the user code that triggered the panic.
+func shouldSkipRecoverFrame(frame runtime.Frame) bool {
+	if frame.Function == "runtime.gopanic" || frame.Function == "runtime.sigpanic" {
 		return true
 	}
 
-	return strings.HasSuffix(function, ".Recover") ||
-		strings.HasSuffix(function, ".RecoverFn") ||
-		strings.HasSuffix(function, ".recoverError") ||
-		strings.HasSuffix(function, ".recoverCallerPC") ||
-		strings.HasSuffix(function, ".Assert") ||
-		strings.HasSuffix(function, ".Assertf")
+	recoverSkipFrameEntriesOnce.Do(func() {
+		recoverSkipFrameEntries = map[uintptr]struct{}{
+			functionEntry(Recover):         {},
+			functionEntry(RecoverFn):       {},
+			functionEntry(recoverError):    {},
+			functionEntry(recoverCallerPC): {},
+		}
+
+		recoverSkipFrameNames = map[string]struct{}{
+			functionName(Assert):  {},
+			functionName(Assertf): {},
+		}
+	})
+
+	_, ok := recoverSkipFrameEntries[frame.Entry]
+	if ok {
+		return true
+	}
+
+	_, ok = recoverSkipFrameNames[frame.Function]
+	return ok
+}
+
+// functionEntry returns the canonical entry PC for fn.
+func functionEntry(fn any) uintptr {
+	return runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Entry()
+}
+
+// functionName returns the fully-qualified runtime name for fn.
+func functionName(fn any) string {
+	return runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
 }
 
 // Recover turns a panic into an error stored in errp.

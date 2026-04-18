@@ -35,7 +35,7 @@ func bootstrap() (err error) {
 	r := errors.MustResult(someResultingFunc())
 	_ = r
 
-	return 
+	return nil
 }
 ```
 
@@ -83,8 +83,7 @@ Typical output shape:
 ```text
 save user 42: disk offline
 
-disk offline
-| at main.go:main.saveUser:18
+at main.go:main.saveUser:18: disk offline
 | at main.go:main.saveUser:18: save user 42
 ```
 
@@ -123,9 +122,10 @@ go run ./demo -full
 
 `-full` is just a convenience alias for the plain stacktrace view.
 
-The demo includes package-only chains, package joins, stdlib joins wrapped by
-package errors, and mixed `fmt.Errorf` / `errors.Join` scenarios so you can see
-exactly where the package is structured and where stdlib errors stay opaque.
+The demo covers the main helper families in the package: constructors and
+wrappers, result and catch helpers, must/recover/assert flows, proxy and
+introspection helpers, plus a nested-package stacktrace scenario that shows full
+paths, package/function formatting, and custom stacktrace options.
 
 ## Basic Usage
 

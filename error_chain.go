@@ -13,6 +13,10 @@ func newErrorChain(node errorNode, child error) *ErrorChain {
 
 func (e *ErrorChain) Error() string {
 	if e.node.format == "" {
+		if e.child == nil {
+			return ""
+		}
+
 		return e.child.Error()
 	}
 

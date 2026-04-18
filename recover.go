@@ -1,7 +1,12 @@
 package errors
 
+import (
+	"runtime"
+	"strings"
+)
+
 // recoverError converts a recovered panic value into an error.
-func recoverError(r any, skipFrames int) error {
+func recoverError(r any) error {
 	if r == nil {
 		return nil
 	}
@@ -9,7 +14,42 @@ func recoverError(r any, skipFrames int) error {
 	if err, ok := r.(error); ok {
 		return err
 	}
-	return NewSkipf(skipFrames, "%v", r)
+
+	node := newErrorNode(recoverCallerPC(), "%v", r)
+	return newErrorChain(node, nil)
+}
+
+func recoverCallerPC() uintptr {
+	pcs := make([]uintptr, 32)
+	n := runtime.Callers(2, pcs)
+	if n == 0 {
+		return 0
+	}
+
+	frames := runtime.CallersFrames(pcs[:n])
+	for {
+		frame, more := frames.Next()
+		if !shouldSkipRecoverFrame(frame.Function) {
+			return frame.PC
+		}
+
+		if !more {
+			return 0
+		}
+	}
+}
+
+func shouldSkipRecoverFrame(function string) bool {
+	if function == "runtime.gopanic" || function == "runtime.sigpanic" {
+		return true
+	}
+
+	return strings.HasSuffix(function, ".Recover") ||
+		strings.HasSuffix(function, ".RecoverFn") ||
+		strings.HasSuffix(function, ".recoverError") ||
+		strings.HasSuffix(function, ".recoverCallerPC") ||
+		strings.HasSuffix(function, ".Assert") ||
+		strings.HasSuffix(function, ".Assertf")
 }
 
 // Recover turns a panic into an error stored in errp.
@@ -34,7 +74,7 @@ func Recover(errp *error) {
 	}
 
 	if r := recover(); r != nil {
-		*errp = recoverError(r, 3)
+		*errp = recoverError(r)
 	}
 }
 
@@ -48,6 +88,6 @@ func Recover(errp *error) {
 //	})
 func RecoverFn(fn func(error)) {
 	if r := recover(); r != nil {
-		fn(recoverError(r, 3))
+		fn(recoverError(r))
 	}
 }

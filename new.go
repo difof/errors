@@ -27,7 +27,8 @@ func Newf(format string, params ...any) error {
 //   - skip: number of stack frames to skip
 //   - msg: error message
 func NewSkip(skip int, msg string) error {
-	return newErrorChain(getCallerPC(skip), nil, msg)
+	node := newErrorNode(getCallerPC(skip), msg)
+	return newErrorChain(node, nil)
 }
 
 // NewSkipf creates a new formatted error, skipping the specified number
@@ -38,5 +39,6 @@ func NewSkip(skip int, msg string) error {
 //   - format: format string for the error message
 //   - params: arguments for the format string
 func NewSkipf(skip int, format string, params ...any) error {
-	return newErrorChain(getCallerPC(skip), nil, format, params...)
+	node := newErrorNode(getCallerPC(skip), format, params...)
+	return newErrorChain(node, nil)
 }

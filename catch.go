@@ -1,7 +1,5 @@
 package errors
 
-import "fmt"
-
 // Catch returns a new error if the given error is not nil, otherwise returns nil.
 // This function wraps the error with stack trace information.
 // Useful for returning error or nil as last statement in functions.
@@ -28,8 +26,7 @@ func Catch(err error) error {
 //	return errors.Catchf(db.Query("SELECT * FROM users"), "failed to query users table: %v", err)
 func Catchf(err error, msg string, params ...any) error {
 	if err != nil {
-		msg = fmt.Sprintf(msg, params...)
-		return WrapSkipf(2, err, msg)
+		return WrapSkipf(2, err, msg, params...)
 	}
 	return nil
 }

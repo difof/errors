@@ -212,34 +212,41 @@ func (r *stacktraceRenderer) renderPackageChain(path []*ErrorEntry, depth int, f
 		return
 	}
 
-	leaf := path[len(path)-1]
-	hasRootMessage := leaf.Resolved.Message != ""
-	if hasRootMessage {
-		r.writeLine(formatMessageLine(depth, firstLineLabel, leaf.Resolved.Message, r.options))
-	}
-
-	frameDepth := depth
+	firstFrameDepth := depth
+	childFrameDepth := depth
 	firstFrameLabel := firstLineLabel
-	if hasRootMessage {
-		frameDepth++
-		firstFrameLabel = ""
-	}
+	firstRendered := true
+
+	var lastFrame *ResolvedEntry
+	lastMessage := ""
 
 	for i := len(path) - 1; i >= 0; i-- {
 		label := firstFrameLabel
 		firstFrameLabel = ""
 
 		message := path[i].Resolved.Message
-		if i == len(path)-1 && hasRootMessage {
-			message = ""
-		}
 
 		if shouldSuppressFrame(message, r.options) {
 			firstFrameLabel = label
 			continue
 		}
 
+		if shouldCollapseFrame(lastFrame, lastMessage, &path[i].Resolved, message) {
+			continue
+		}
+
+		frameDepth := childFrameDepth
+		if firstRendered {
+			frameDepth = firstFrameDepth
+			if message != "" {
+				childFrameDepth = depth + 1
+			}
+			firstRendered = false
+		}
+
 		r.writeLine(formatFrameLine(frameDepth, label, &path[i].Resolved, message, r.options))
+		lastFrame = &path[i].Resolved
+		lastMessage = message
 	}
 }
 
@@ -257,6 +264,9 @@ func (r *stacktraceRenderer) renderForeignTerminatedChain(path []*ErrorEntry, ta
 		firstFrameLabel = ""
 	}
 
+	var lastFrame *ResolvedEntry
+	lastMessage := ""
+
 	for i := len(path) - 1; i >= 0; i-- {
 		label := firstFrameLabel
 		firstFrameLabel = ""
@@ -267,7 +277,13 @@ func (r *stacktraceRenderer) renderForeignTerminatedChain(path []*ErrorEntry, ta
 			continue
 		}
 
+		if shouldCollapseFrame(lastFrame, lastMessage, &path[i].Resolved, message) {
+			continue
+		}
+
 		r.writeLine(formatFrameLine(frameDepth, label, &path[i].Resolved, message, r.options))
+		lastFrame = &path[i].Resolved
+		lastMessage = message
 	}
 }
 
@@ -275,6 +291,8 @@ func (r *stacktraceRenderer) renderForeignTerminatedChain(path []*ErrorEntry, ta
 func (r *stacktraceRenderer) renderMultiBranch(path []*ErrorEntry, multi *ErrorEntry, depth int, firstLineLabel string) {
 	currentDepth := depth
 	label := firstLineLabel
+	var lastFrame *ResolvedEntry
+	lastMessage := ""
 
 	for _, node := range path {
 		labelForNode := label
@@ -283,9 +301,16 @@ func (r *stacktraceRenderer) renderMultiBranch(path []*ErrorEntry, multi *ErrorE
 			continue
 		}
 
+		if shouldCollapseFrame(lastFrame, lastMessage, &node.Resolved, node.Resolved.Message) {
+			label = ""
+			continue
+		}
+
 		r.writeLine(formatFrameLine(currentDepth, labelForNode, &node.Resolved, node.Resolved.Message, r.options))
 		label = ""
 		currentDepth++
+		lastFrame = &node.Resolved
+		lastMessage = node.Resolved.Message
 	}
 
 	multiMessage := multi.Resolved.Message
@@ -340,6 +365,15 @@ func defaultStacktraceBranchLabel(index int) string {
 // shouldSuppressFrame reports whether a frame line should be skipped.
 func shouldSuppressFrame(message string, options *StacktraceOptions) bool {
 	return options.SuppressEmptyFrames && message == ""
+}
+
+func shouldCollapseFrame(last *ResolvedEntry, lastMessage string, current *ResolvedEntry, currentMessage string) bool {
+	if last == nil || currentMessage != "" {
+		return false
+	}
+
+	_ = lastMessage
+	return last.FilePath == current.FilePath && last.FuncPath == current.FuncPath && last.Line == current.Line
 }
 
 // defaultStacktraceTreePrefix returns the default tree prefix.

@@ -18,14 +18,8 @@ func TestJoinFiltersNilAndHandlesSingleChildCases(t *testing.T) {
 	}
 
 	got := Join(nil, singleWrap, nil)
-	tree, ok := IsErrorTree(got)
-	if !ok {
-		t.Fatalf("Join(singleWrap) returned %T, want *ErrorTree", got)
-	}
-
-	children := tree.Unwrap()
-	if len(children) != 1 || children[0] != singleWrap {
-		t.Fatalf("Join(singleWrap) children = %#v, want [%#v]", children, singleWrap)
+	if got != singleWrap {
+		t.Fatalf("Join(singleWrap) returned %T, want original single-wrap error", got)
 	}
 
 	if got := Join(nil, multiWrap, nil); got != multiWrap {
@@ -34,6 +28,10 @@ func TestJoinFiltersNilAndHandlesSingleChildCases(t *testing.T) {
 
 	if got := Join(nil, stdlibJoin, nil); got != stdlibJoin {
 		t.Fatalf("Join(stdlibJoin) returned %T, want original joined error", got)
+	}
+
+	if got := Join(nil, leaf, nil); got != leaf {
+		t.Fatalf("Join(leaf) returned %T, want original leaf error", got)
 	}
 }
 

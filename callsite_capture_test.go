@@ -7,12 +7,42 @@ import (
 	"testing"
 )
 
+// TestCallsiteCapture is the guardrail for helper callsite semantics.
+//
+// The package relies on helper-recorded caller locations to make stacktrace
+// output useful. That means helper layering is part of the public behavior, not
+// just an implementation detail. When a helper starts calling another helper,
+// moves through a returned closure, or changes how it panics, the expected
+// captured callsite can shift silently even though the code still compiles.
+//
+// This file intentionally centralizes those expectations so future changes have
+// one place that explains the contract:
+// - direct constructors/wrappers should capture the exact call line
+// - closure-returning helpers should capture the closure invocation line, not
+//   the earlier closure creation line
+// - Must helpers should preserve the original user callsite even though they
+//   panic internally and are later recovered
+// - Recover/RecoverFn on raw non-error panics use runtime stack recovery, so
+//   those checks are allowed a line delta of 1 while still requiring the same
+//   source file and containing function
+//
+// If this test fails after refactoring:
+// 1. decide whether the new callsite is actually better or just accidentally
+//    shifted by an extra helper frame
+// 2. if it is accidental, fix the helper skip/capture logic
+// 3. if it is intentional and better, update the relevant helper in this file
+//    so the new contract is explicit
+
+// captureSite is the expected resolved location for one helper invocation.
 type captureSite struct {
 	file string
 	fn   string
 	line int
 }
 
+// currentSite records the calling test helper's location and applies offset to
+// the line number. The helpers below use this to pin the line that should own
+// the resulting package error.
 func currentSite(offset int) captureSite {
 	pc, file, line, ok := runtime.Caller(1)
 	if !ok {
@@ -26,6 +56,8 @@ func currentSite(offset int) captureSite {
 	}
 }
 
+// assertExactRootSite requires a fully exact file/function/line match.
+// This is used for helpers whose callsite capture should be deterministic.
 func assertExactRootSite(t *testing.T, err error, want captureSite) {
 	t.Helper()
 
@@ -40,6 +72,10 @@ func assertExactRootSite(t *testing.T, err error, want captureSite) {
 	}
 }
 
+// assertApproxRecoveredRootSite is reserved for raw non-error panic recovery.
+// The recovered location should still point at the same source file and
+// function, but the runtime may resolve the PC to an adjacent line around the
+// panic site, so a delta of 1 is accepted here.
 func assertApproxRecoveredRootSite(t *testing.T, err error, want captureSite, funcContains string) {
 	t.Helper()
 

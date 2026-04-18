@@ -201,18 +201,17 @@ func (r *stacktraceRenderer) renderPackageChain(path []*ErrorEntry, depth int, f
 	}
 
 	for i := len(path) - 1; i >= 0; i-- {
+		label := firstFrameLabel
+		firstFrameLabel = ""
+
 		message := path[i].Resolved.Message
 		if i == len(path)-1 && hasRootMessage {
 			message = ""
 		}
 
 		if shouldSuppressFrame(message, r.options) {
+			firstFrameLabel = label
 			continue
-		}
-
-		label := ""
-		if i == len(path)-1 {
-			label = firstFrameLabel
 		}
 
 		r.writeLine(formatFrameLine(frameDepth, label, &path[i].Resolved, message, r.options))
@@ -233,14 +232,13 @@ func (r *stacktraceRenderer) renderForeignTerminatedChain(path []*ErrorEntry, ta
 	}
 
 	for i := len(path) - 1; i >= 0; i-- {
+		label := firstFrameLabel
+		firstFrameLabel = ""
+
 		message := path[i].Resolved.Message
 		if shouldSuppressFrame(message, r.options) {
+			firstFrameLabel = label
 			continue
-		}
-
-		label := ""
-		if i == len(path)-1 {
-			label = firstFrameLabel
 		}
 
 		r.writeLine(formatFrameLine(frameDepth, label, &path[i].Resolved, message, r.options))
@@ -252,13 +250,13 @@ func (r *stacktraceRenderer) renderMultiBranch(path []*ErrorEntry, multi *ErrorE
 	label := firstLineLabel
 
 	for _, node := range path {
+		labelForNode := label
 		if shouldSuppressFrame(node.Resolved.Message, r.options) {
-			currentDepth++
-			label = ""
+			label = labelForNode
 			continue
 		}
 
-		r.writeLine(formatFrameLine(currentDepth, label, &node.Resolved, node.Resolved.Message, r.options))
+		r.writeLine(formatFrameLine(currentDepth, labelForNode, &node.Resolved, node.Resolved.Message, r.options))
 		label = ""
 		currentDepth++
 	}

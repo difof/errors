@@ -85,6 +85,26 @@ func TestStacktraceCanSuppressMessageLessFrames(t *testing.T) {
 	}
 }
 
+func TestStacktraceSuppressEmptyFramesDoesNotAddGhostDepth(t *testing.T) {
+	err := WrapSkip(0, Join(NewSkipf(0, "left"), NewSkipf(0, "right")))
+	entry := Expand(err)
+
+	got := Stacktrace(
+		err,
+		StacktraceWithColor(false),
+		StacktraceWithSuppressEmptyFrames(true),
+	)
+	want := strings.Join([]string{
+		"at " + mustRawLocation(&entry.Children[0].Resolved) + ": joined errors",
+		"| [1] left",
+		"| [2] right",
+	}, "\n")
+
+	if got != want {
+		t.Fatalf("Stacktrace() =\n%s\nwant\n%s", got, want)
+	}
+}
+
 func TestStacktraceFormatsJoinedErrorsAsSiblingBranches(t *testing.T) {
 	err := Join(
 		NewSkipf(0, "left"),

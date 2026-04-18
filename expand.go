@@ -8,7 +8,7 @@ import (
 // Expand converts package-native error nodes into a resolved tree.
 //
 // Foreign errors, including stdlib wrappers and stdlib joins, are treated as
-// opaque leaves for now. This intentionally preserves their original text,
+// opaque leaves. This intentionally preserves their original text,
 // especially for fmt.Errorf calls with multiple %w operands where rebuilding the
 // tree from Unwrap() []error would lose wrapper-local formatting.
 func Expand(err error) *ErrorEntry {
@@ -18,6 +18,8 @@ func Expand(err error) *ErrorEntry {
 	return entryRoot
 }
 
+// expandNode expands err into an ErrorEntry tree and queues any package frames
+// that still need runtime resolution.
 func expandNode(lazyFrames []lazyFrame, err error) ([]lazyFrame, *ErrorEntry) {
 	if err == nil {
 		return lazyFrames, nil
@@ -36,6 +38,7 @@ func expandNode(lazyFrames []lazyFrame, err error) ([]lazyFrame, *ErrorEntry) {
 	return lazyFrames, entry
 }
 
+// expandChain expands one package-owned single-child node.
 func expandChain(lazyFrames []lazyFrame, chain *ErrorChain) ([]lazyFrame, *ErrorEntry) {
 	entry := newErrorEntry(formatNodeMessage(chain.node.format, chain.node.params))
 
@@ -48,6 +51,7 @@ func expandChain(lazyFrames []lazyFrame, chain *ErrorChain) ([]lazyFrame, *Error
 	return appendLazyFrame(lazyFrames, entry, chain.node.pc), entry
 }
 
+// expandTree expands one package-owned multi-child node.
 func expandTree(lazyFrames []lazyFrame, tree *ErrorTree) ([]lazyFrame, *ErrorEntry) {
 	entry := newErrorEntry(formatNodeMessage(tree.node.format, tree.node.params))
 	entry.Resolved.Multi = true
@@ -63,17 +67,18 @@ func expandTree(lazyFrames []lazyFrame, tree *ErrorTree) ([]lazyFrame, *ErrorEnt
 	return appendLazyFrame(lazyFrames, entry, tree.node.pc), entry
 }
 
-// lazyFrame is used as a slice of ErrorEntry's after expansion.
-// It is used for stack frame resolution in an optimized one shot manner.
+// lazyFrame pairs an unresolved program counter with the entry that should receive it.
 type lazyFrame struct {
 	pc    uintptr
 	entry *ErrorEntry
 }
 
+// newLazyFrame creates a lazyFrame for one entry.
 func newLazyFrame(entry *ErrorEntry, pc uintptr) lazyFrame {
 	return lazyFrame{pc, entry}
 }
 
+// appendLazyFrame adds an entry to the resolution queue when it has a callsite.
 func appendLazyFrame(frames []lazyFrame, entry *ErrorEntry, pc uintptr) []lazyFrame {
 	if pc != 0 {
 		frames = append(frames, newLazyFrame(entry, pc))
@@ -82,10 +87,12 @@ func appendLazyFrame(frames []lazyFrame, entry *ErrorEntry, pc uintptr) []lazyFr
 	return frames
 }
 
+// formatNodeMessage formats the package-owned message stored in a node.
 func formatNodeMessage(format string, params []any) string {
 	return fmt.Sprintf(format, params...)
 }
 
+// resolveFrames resolves all queued program counters in one runtime pass.
 func resolveFrames(lazyFrames []lazyFrame) {
 	bufLen := len(lazyFrames)
 	pcBuffer := make([]uintptr, bufLen)

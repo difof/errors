@@ -1,5 +1,6 @@
 package errors
 
+// ResolvedEntry holds the resolved, display-oriented view of one error node.
 type ResolvedEntry struct {
 	Message string `json:"message,omitempty" yaml:"message,omitempty"`
 
@@ -18,6 +19,7 @@ type ErrorEntry struct {
 	Children []*ErrorEntry
 }
 
+// newErrorEntry creates an ErrorEntry with an initialized child slice.
 func newErrorEntry(message string) *ErrorEntry {
 	return &ErrorEntry{
 		Children: []*ErrorEntry{},

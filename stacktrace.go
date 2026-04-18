@@ -19,23 +19,32 @@ var (
 	workspaceRoot          = detectWorkspaceRoot()
 )
 
+// StacktraceBranchLabelFormatter formats the label shown for each child branch.
 type StacktraceBranchLabelFormatter func(index int) string
+
+// StacktraceTreePrefixFormatter returns the prefix used for one tree indent unit.
 type StacktraceTreePrefixFormatter func(colorEnabled bool) string
 
+// StacktraceFunctionFormat controls how function information is rendered in a stack location.
 type StacktraceFunctionFormat int
 
 const (
+	// StacktraceFunctionPackageAndFunc renders package and function names.
 	StacktraceFunctionPackageAndFunc StacktraceFunctionFormat = iota
+	// StacktraceFunctionFuncOnly renders only the function name.
 	StacktraceFunctionFuncOnly
+	// StacktraceFunctionNone omits function information entirely.
 	StacktraceFunctionNone
 )
 
+// StacktraceColors configures the colors used by Stacktrace when color is enabled.
 type StacktraceColors struct {
 	Source  *color.Color
 	Func    *color.Color
 	Message *color.Color
 }
 
+// StacktraceOptions holds the resolved configuration for Stacktrace rendering.
 type StacktraceOptions struct {
 	Indent              int
 	PreIndent           int
@@ -48,68 +57,81 @@ type StacktraceOptions struct {
 	Colors              StacktraceColors
 }
 
+// StacktraceOption mutates StacktraceOptions before rendering.
 type StacktraceOption func(opt *StacktraceOptions)
 
+// StacktraceWithIndent sets the number of columns added for each tree depth.
 func StacktraceWithIndent(spaces int) StacktraceOption {
 	return func(opt *StacktraceOptions) {
 		opt.Indent = spaces
 	}
 }
 
+// StacktraceWithPreIndent sets a fixed left margin for all rendered lines.
 func StacktraceWithPreIndent(spaces int) StacktraceOption {
 	return func(opt *StacktraceOptions) {
 		opt.PreIndent = spaces
 	}
 }
 
+// StacktraceWithColor enables or disables colorized output.
 func StacktraceWithColor(color bool) StacktraceOption {
 	return func(opt *StacktraceOptions) {
 		opt.Color = color
 	}
 }
 
+// StacktraceWithSuppressEmptyFrames hides frame lines that have no local message.
 func StacktraceWithSuppressEmptyFrames(suppress bool) StacktraceOption {
 	return func(opt *StacktraceOptions) {
 		opt.SuppressEmptyFrames = suppress
 	}
 }
 
+// StacktraceWithTrimFilePath renders file paths relative to the detected module root.
 func StacktraceWithTrimFilePath(trim bool) StacktraceOption {
 	return func(opt *StacktraceOptions) {
 		opt.TrimFilePath = trim
 	}
 }
 
+// StacktraceWithFunctionFormat selects how function information is rendered.
 func StacktraceWithFunctionFormat(format StacktraceFunctionFormat) StacktraceOption {
 	return func(opt *StacktraceOptions) {
 		opt.FunctionFormat = format
 	}
 }
 
+// StacktraceWithTreePrefix uses prefix for each tree indent unit.
 func StacktraceWithTreePrefix(prefix string) StacktraceOption {
 	return func(opt *StacktraceOptions) {
 		opt.TreePrefixFormatter = func(bool) string { return prefix }
 	}
 }
 
+// StacktraceWithTreePrefixFormatter customizes the prefix for each tree indent unit.
 func StacktraceWithTreePrefixFormatter(formatter StacktraceTreePrefixFormatter) StacktraceOption {
 	return func(opt *StacktraceOptions) {
 		opt.TreePrefixFormatter = formatter
 	}
 }
 
+// StacktraceWithBranchLabel customizes the label shown for child branches.
 func StacktraceWithBranchLabel(formatter StacktraceBranchLabelFormatter) StacktraceOption {
 	return func(opt *StacktraceOptions) {
 		opt.BranchLabel = formatter
 	}
 }
 
+// StacktraceWithColors overrides one or more default output colors.
 func StacktraceWithColors(colors StacktraceColors) StacktraceOption {
 	return func(opt *StacktraceOptions) {
 		opt.Colors = colors
 	}
 }
 
+// Stacktrace renders err as a readable tree/chain view for debugging.
+// Package-owned errors are expanded structurally; foreign errors are rendered as opaque leaves.
 func Stacktrace(err error, options ...StacktraceOption) string {
 	config := &StacktraceOptions{
 		Indent:              2,
@@ -156,12 +178,14 @@ func Stacktrace(err error, options ...StacktraceOption) string {
 	return renderer.sb.String()
 }
 
+// stacktraceRenderer writes a stacktrace incrementally while preserving branch state.
 type stacktraceRenderer struct {
 	sb           strings.Builder
 	options      *StacktraceOptions
 	needsNewline bool
 }
 
+// renderEntry renders one entry subtree at the requested depth.
 func (r *stacktraceRenderer) renderEntry(entry *ErrorEntry, depth int, firstLineLabel string) {
 	if entry == nil {
 		return
@@ -182,6 +206,7 @@ func (r *stacktraceRenderer) renderEntry(entry *ErrorEntry, depth int, firstLine
 	r.renderForeignTerminatedChain(path, tail, depth, firstLineLabel)
 }
 
+// renderPackageChain renders a package-owned single-child chain leaf-first.
 func (r *stacktraceRenderer) renderPackageChain(path []*ErrorEntry, depth int, firstLineLabel string) {
 	if len(path) == 0 {
 		return
@@ -218,6 +243,7 @@ func (r *stacktraceRenderer) renderPackageChain(path []*ErrorEntry, depth int, f
 	}
 }
 
+// renderForeignTerminatedChain renders a package chain whose leaf is a foreign error.
 func (r *stacktraceRenderer) renderForeignTerminatedChain(path []*ErrorEntry, tail *ErrorEntry, depth int, firstLineLabel string) {
 	hasRootMessage := tail.Resolved.Message != ""
 	if hasRootMessage {
@@ -245,6 +271,7 @@ func (r *stacktraceRenderer) renderForeignTerminatedChain(path []*ErrorEntry, ta
 	}
 }
 
+// renderMultiBranch renders a package-owned multi node and its child branches.
 func (r *stacktraceRenderer) renderMultiBranch(path []*ErrorEntry, multi *ErrorEntry, depth int, firstLineLabel string) {
 	currentDepth := depth
 	label := firstLineLabel
@@ -274,6 +301,7 @@ func (r *stacktraceRenderer) renderMultiBranch(path []*ErrorEntry, multi *ErrorE
 	}
 }
 
+// writeLine appends one rendered line, inserting a newline when needed.
 func (r *stacktraceRenderer) writeLine(line string) {
 	if r.needsNewline {
 		r.sb.WriteString("\n")
@@ -283,6 +311,7 @@ func (r *stacktraceRenderer) writeLine(line string) {
 	r.needsNewline = true
 }
 
+// collectPackageChain walks package-owned single-child nodes until a leaf or foreign boundary.
 func collectPackageChain(entry *ErrorEntry) ([]*ErrorEntry, *ErrorEntry) {
 	path := make([]*ErrorEntry, 0, 4)
 	current := entry
@@ -303,18 +332,22 @@ func collectPackageChain(entry *ErrorEntry) ([]*ErrorEntry, *ErrorEntry) {
 	return path, current
 }
 
+// defaultStacktraceBranchLabel formats the default `[n] ` branch label.
 func defaultStacktraceBranchLabel(index int) string {
 	return "[" + strconv.Itoa(index) + "] "
 }
 
+// shouldSuppressFrame reports whether a frame line should be skipped.
 func shouldSuppressFrame(message string, options *StacktraceOptions) bool {
 	return options.SuppressEmptyFrames && message == ""
 }
 
+// defaultStacktraceTreePrefix returns the default tree prefix.
 func defaultStacktraceTreePrefix(bool) string {
 	return "|"
 }
 
+// defaultStacktraceColors returns the built-in stacktrace colors.
 func defaultStacktraceColors() StacktraceColors {
 	return StacktraceColors{
 		Source:  stacktraceSourceColor,
@@ -323,6 +356,7 @@ func defaultStacktraceColors() StacktraceColors {
 	}
 }
 
+// resolvedStacktraceColors fills in any missing colors with defaults.
 func resolvedStacktraceColors(colors StacktraceColors) StacktraceColors {
 	defaults := defaultStacktraceColors()
 
@@ -341,6 +375,7 @@ func resolvedStacktraceColors(colors StacktraceColors) StacktraceColors {
 	return colors
 }
 
+// formatMessageLine renders one message-only line.
 func formatMessageLine(depth int, label, message string, options *StacktraceOptions) string {
 	indent := indentPrefix(depth, options)
 	renderedPrefix := indent + label
@@ -348,6 +383,7 @@ func formatMessageLine(depth int, label, message string, options *StacktraceOpti
 	return formatIndentedMessage(renderedPrefix, continuationPrefix, message, options)
 }
 
+// formatFrameLine renders one stack frame line with an optional local message.
 func formatFrameLine(depth int, label string, entry *ResolvedEntry, message string, options *StacktraceOptions) string {
 	indent := indentPrefix(depth, options)
 	renderedPrefix := indent + label
@@ -367,6 +403,7 @@ func formatFrameLine(depth int, label string, entry *ResolvedEntry, message stri
 	return formatIndentedMessage(renderedPrefix+": ", continuationPrefix+"  ", message, options)
 }
 
+// indentPrefix returns the full prefix for a given tree depth.
 func indentPrefix(depth int, options *StacktraceOptions) string {
 	prefix := strings.Repeat(" ", options.PreIndent)
 	if depth <= 0 {
@@ -376,6 +413,7 @@ func indentPrefix(depth int, options *StacktraceOptions) string {
 	return prefix + strings.Repeat(indentUnit(options), depth)
 }
 
+// indentUnit returns one unit of tree indentation.
 func indentUnit(options *StacktraceOptions) string {
 	prefix := ""
 	if options.TreePrefixFormatter != nil {
@@ -394,6 +432,7 @@ func indentUnit(options *StacktraceOptions) string {
 	return prefix + strings.Repeat(" ", padding)
 }
 
+// formatStackLocation builds the raw and rendered location strings for one entry.
 func formatStackLocation(entry *ResolvedEntry, options *StacktraceOptions) (string, string) {
 	rawParts := make([]string, 0, 3)
 	renderedParts := make([]string, 0, 3)
@@ -425,6 +464,7 @@ func formatStackLocation(entry *ResolvedEntry, options *StacktraceOptions) (stri
 	return strings.Join(rawParts, ":"), strings.Join(renderedParts, ":")
 }
 
+// formatIndentedMessage renders a possibly multiline message with aligned continuation lines.
 func formatIndentedMessage(renderedPrefix, continuationPrefix, message string, options *StacktraceOptions) string {
 	if message == "" {
 		return renderedPrefix
@@ -438,6 +478,7 @@ func formatIndentedMessage(renderedPrefix, continuationPrefix, message string, o
 	return renderedPrefix + strings.Join(parts, "\n"+continuationPrefix)
 }
 
+// colorizeSource applies the configured source color when enabled.
 func colorizeSource(value string, options *StacktraceOptions) string {
 	if options.Color && options.Colors.Source != nil {
 		return options.Colors.Source.Sprint(value)
@@ -446,6 +487,7 @@ func colorizeSource(value string, options *StacktraceOptions) string {
 	return value
 }
 
+// colorizeFunc applies the configured function color when enabled.
 func colorizeFunc(value string, options *StacktraceOptions) string {
 	if options.Color && options.Colors.Func != nil {
 		return options.Colors.Func.Sprint(value)
@@ -454,6 +496,7 @@ func colorizeFunc(value string, options *StacktraceOptions) string {
 	return value
 }
 
+// colorizeMessage applies the configured message color when enabled.
 func colorizeMessage(value string, options *StacktraceOptions) string {
 	if options.Color && options.Colors.Message != nil {
 		return options.Colors.Message.Sprint(value)
@@ -462,6 +505,7 @@ func colorizeMessage(value string, options *StacktraceOptions) string {
 	return value
 }
 
+// trimWorkspacePath converts an absolute file path into a module-relative path when possible.
 func trimWorkspacePath(path string) string {
 	if workspaceRoot == "" || path == "" {
 		return path
@@ -479,6 +523,7 @@ func trimWorkspacePath(path string) string {
 	return filepath.ToSlash(rel)
 }
 
+// detectWorkspaceRoot walks upward from this source file until it finds go.mod.
 func detectWorkspaceRoot() string {
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
@@ -500,10 +545,12 @@ func detectWorkspaceRoot() string {
 	}
 }
 
+// visibleWidth returns the display width after stripping ANSI escape codes.
 func visibleWidth(value string) int {
 	return len(ansiRegexp.ReplaceAllString(value, ""))
 }
 
+// formatFunctionPath reduces a runtime function path according to format.
 func formatFunctionPath(funcPath string, format StacktraceFunctionFormat) string {
 	if funcPath == "" || format == StacktraceFunctionNone {
 		return ""

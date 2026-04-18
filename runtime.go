@@ -4,8 +4,7 @@ import (
 	"runtime"
 )
 
-// getCallerPC returns the program counter of the caller,
-// skipping the specified number of frames + the getCallerPC function itself.
+// getCallerPC returns the caller program counter after skipping skip frames.
 func getCallerPC(skip int) uintptr {
 	var pcs [1]uintptr
 	if runtime.Callers(skip+2, pcs[:]) == 0 {
